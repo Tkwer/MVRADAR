@@ -1,0 +1,14 @@
+# 忽略所有 .npy 文件  
+dataset
+*.npy  
+
+# 忽略日志文件  
+*.log  
+
+# 忽略 Python 虚拟环境  
+venv/  
+.env/  
+
+# 忽略临时/缓存文件  
+__pycache__/  
+*.pyc
