@@ -1,4 +1,6 @@
 import torch
+import torch.nn.functional as F  
+
 from utils.helpers import AverageMeter, minmaxscaler
 from bin.ride_augmentation import ride_augmentation
 from utils.common import accuracy, confusion_matrix_compute
@@ -54,12 +56,24 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
         # Normalize features
         selected_features_dict = {k: minmaxscaler(v) for k, v in selected_features_dict.items()}
 
+        weights_label = torch.stack([torch.tensor([  
+            args.mv_feature_weights[target.item()][feature_name]   
+            for feature_name in model.selected_features])   
+                for target in targets]) 
         # Forward pass
-        outputs = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
+        outputs, weights = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
 
         # Compute loss
         optimizer.zero_grad()
         loss = criterion(outputs, targets.squeeze(dim=1))
+        # 1. pred_log_prob需要是log概率  
+        # 2. target_prob是概率分布  
+        # 3. reduction参数选择:  
+        #    - 'batchmean': 平均批次损失  
+        #    - 'sum': 总损失  
+        #    - 'none': 逐元素损失
+        kl_loss = F.kl_div(weights, weights_label, reduction='batchmean') 
+        loss = loss+kl_loss
         loss_tracker.update(loss.item(), targets.size(0))
 
         # Backpropagation

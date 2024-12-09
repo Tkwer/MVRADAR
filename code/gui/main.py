@@ -12,7 +12,7 @@ import utils.globalvar as gl
 import matplotlib.pyplot as plt
 from bin.train import TrainRunner
 from bin.train import TestRunner
-
+ 
 def get_color_list(color_combo_box):  
     """  
     获取颜色映射表列表并填充下拉框  
@@ -130,7 +130,7 @@ def start_training(args):
             args.fusion_mode = parent  # 父类名
             args.method = children[0] if children else None  # 只取第一个子类，如果无子类为 None
 
-    if train_and_vali_data_dir and args.fusion_mode and args.method:
+    if train_and_vali_data_dir and args.fusion_mode:
         collector = TrainRunner('Listener', train_and_vali_data_dir, train_ratio, args)
         collector.start()
         update_train_progress(args)

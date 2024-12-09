@@ -40,6 +40,19 @@ class MultiviewDecoder(nn.Module):
         self.num_views = num_views
         self.feature_dim = feature_dim
 
+    def add_fusion(self, *x_list):
+        # Dynamically sum features along the last dimension.
+        # 确保 x_list 是一个包含张量的列表  
+        if not x_list:  
+            return None  # 如果没有输入，返回 None 或者可以抛出异常  
+
+        # 使用 torch.stack 将所有输入张量沿着新维度堆叠  
+        stacked_tensors = torch.stack(x_list, dim=0)  # 形状为 (num_views, batch_size, feature_dim)  
+        
+        # 对最后一个维度进行求和  
+        return torch.sum(stacked_tensors, dim=0)  # 返回形状为 (batch_size, feature_dim)  
+
+
     def concat_fusion(self, *x_list):
         # Dynamically concatenate features along the last dimension.
         return torch.cat(x_list, dim=-1)
@@ -74,7 +87,9 @@ class MultiviewDecoder(nn.Module):
         if self.num_views is not None and len(x_list) != self.num_views:
             raise ValueError(f"Expected {self.num_views} inputs, got {len(x_list)}")
 
-        if self.mode == 'concat':
+        if self.mode == 'add':
+            return self.add_fusion(*x_list)
+        elif self.mode == 'concat':
             return self.concat_fusion(*x_list)
         elif self.mode == 'alignment':
             return self.alignment_fusion(*x_list)
@@ -83,14 +98,18 @@ class MultiviewDecoder(nn.Module):
         else:
             raise ValueError("Invalid fusion mode")
 
+# add 是concat的特殊形式
 class ConcatDecoder(MultiviewDecoder):  
     """  
     Simply concatenates input features from multiple views.  
     """  
-    def __init__(self, feature_dim, num_views=None):  
-        super().__init__(feature_dim=feature_dim, num_views=num_views, mode='concat')  
+    def __init__(self, feature_dim, num_views=None, mode='concat'):  
+        super().__init__(feature_dim=feature_dim, num_views=num_views, mode=mode)  
         # 计算输入特征的大小  
-        input_size = feature_dim * num_views  # 假设每个视图的特征维度均为 feature_dim  
+        if mode=='concat':
+            input_size = feature_dim * num_views  # 假设每个视图的特征维度均为 feature_dim  
+        elif mode=='add':
+            input_size = feature_dim  # 假设每个视图的特征维度均为 feature_dim 
 
         # 添加线性层，输入大小为 input_size，输出大小为 feature_dim  
         self.linear = nn.Linear(input_size, feature_dim)  

@@ -45,7 +45,7 @@ class MultiViewFeatureFusion(nn.Module):
         # Initialize decoder based on fusion mode  
         if fusion_mode == 'concatenate':  
             # Use ConcatDecoder  
-            self.decoder = ConcatDecoder(feature_dim, num_views=len(self.selected_features))  
+            self.decoder = ConcatDecoder(feature_dim, num_views=len(self.selected_features), method=method)  
         elif fusion_mode == 'alignment':  
             # Use AlignmentDecoder with a specific alignment strategy  
             self.decoder = AlignmentDecoder(feature_dim, num_views=len(self.selected_features), method=method)  
@@ -86,9 +86,9 @@ class MultiViewFeatureFusion(nn.Module):
             encoded_features.append(encoded_feature)  
 
         # Fuse the extracted features using the decoder  
-        fused_features = self.decoder(*encoded_features)  
+        fused_features, weights = self.decoder(*encoded_features)  
 
         # Apply fully connected layer after fusion to obtain final representation  
         final_features = self.fc_fusion(fused_features)  
         ouputs = self.classifier(final_features)
-        return ouputs
+        return ouputs, weights

@@ -29,11 +29,11 @@ def initialize_model(args, num_classes):
 
     # Get other fusion-related parameters from args or set defaults
     if args.fusion_mode == 'concatenate': 
-        method = None
+        method = getattr(args, 'method', 'concat')
     elif args.fusion_mode == 'alignment':  
-        method = getattr(args, 'alignment_type', 'attention')
+        method = getattr(args, 'method', 'attention')
     elif args.fusion_mode == 'shared_specific':      
-        method = getattr(args, 'sharedspecific_method', 'basic_shared')
+        method = getattr(args, 'method', 'basic_shared')
         
     bottleneck_dim = getattr(args, 'bottleneck_dim', None)
 

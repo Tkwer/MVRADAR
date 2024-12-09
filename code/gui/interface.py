@@ -652,7 +652,7 @@ class Ui_MainWindow(object):
         self.line_16.setObjectName("line_16")
         self.horizontalLayout_11.addWidget(self.line_16)
         method_dict = {
-                    "concatenate": None, 
+                    "concatenate": ["add", "concat"], 
                     "alignment": ["attention", "mi", "adversarial", "graph"], 
                     "shared_specific": ["basic_shared", "attention_enhanced", "adversarial_shared", "information_bottleneck", "graph_structured"]
                 }
