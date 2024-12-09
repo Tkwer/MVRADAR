@@ -4,29 +4,62 @@ import torch.nn as nn
 from bin.dataset import MultiViewDataset
 from bin.train_utils import train_model
 from bin.validate_utils import validate_model
-from models.model import ContrastModel, FuzzyModel_V2, MFFNet
+from models.model import MultiViewFeatureFusion
+from utils.common import *
 from utils.common import freeze_model_params
 from utils.common import adjust_learning_rate, save_training_results
-from utils.checkpoint import load_existing_model, save_checkpoint
+from utils.checkpoint import *
 import threading as th
 import utils.globalvar as gl
-import datetime
 import numpy as np
+import re 
 
-def initialize_model(args, num_classes, architecture, train_ratios):
+
+def initialize_model(args, num_classes):
     """
-    初始化模型
-    :param num_classes: 分类数
-    :param architecture: 模型架构
-    :param train_ratios: 训练集划分比例
-    :return: 初始化的模型
+    Initialize the MultiViewFeatureFusion model based on the given architecture.
+
+    Args:
+        args: Arguments containing configurations and hyperparameters.
+        num_classes: Number of classes.
+
+    Returns:
+        Initialized MultiViewFeatureFusion model.
     """
-    if 'ALL_' in architecture:
-        return MFFNet(num_classes, architecture, args.lstm_layers, args.hidden_size, args.fc_size)
-    elif 'F-DATA_' in architecture:
-        return FuzzyModel_V2(64, architecture, args.lstm_layers, args.hidden_size, args.fc_size, len(train_ratios))
-    else:
-        return ContrastModel(num_classes, architecture, args.lstm_layers, args.hidden_size, args.fc_size)
+
+    # Get other fusion-related parameters from args or set defaults
+    if args.fusion_mode == 'concatenate': 
+        method = None
+    elif args.fusion_mode == 'alignment':  
+        method = getattr(args, 'alignment_type', 'attention')
+    elif args.fusion_mode == 'shared_specific':      
+        method = getattr(args, 'sharedspecific_method', 'basic_shared')
+        
+    bottleneck_dim = getattr(args, 'bottleneck_dim', None)
+
+    # Create input_feature_shapes dictionary (should be provided in args)
+    input_feature_shapes = args.input_feature_shapes  # Must be a dict mapping feature names to shapes
+
+    # Initialize the MultiViewFeatureFusion model
+    model = MultiViewFeatureFusion(
+        backbone=args.backbone,
+        cnn_output_size=args.cnn_output_size,
+        hidden_size=args.hidden_size,
+        rnn_type=args.rnn_type,
+        lstm_layers=args.lstm_layers,
+        bidirectional=args.bidirectional,
+        fc_size=args.fc_size,
+        input_feature_shapes=input_feature_shapes,
+        fusion_mode=args.fusion_mode,
+        method=method,
+        bottleneck_dim=bottleneck_dim,
+        selected_features=args.selected_features
+    )
+
+    # Add a classifier layer to output logits for num_classes
+    model.classifier = nn.Linear(args.fc_size, num_classes)
+
+    return model
 
 class TrainRunner(th.Thread):
     """
@@ -85,21 +118,29 @@ def run_training(args, data_dir, train_ratios):
         num_workers=args.workers, pin_memory=True
     )
     # 模型保存路径
-    save_path = os.path.join(args.model, f"{args.arch}_model-{datetime.datetime.now().strftime('%m-%d-%H-%M')}")
+    final_path = build_directory_structure(args.selected_features, args.optional_features, args.fusion_mode, args.method)
+    save_path = os.path.join(args.model_path, final_path)
     os.makedirs(save_path, exist_ok=True)
     os.makedirs(os.path.join(save_path, 'output'), exist_ok=True)
     
-    np.savetxt(os.path.join(save_path, 'output/log.txt'), 
-               ([f"Train Dataset: {data_dir}"], train_ratios), fmt='%s')
-
+    with open(os.path.join(save_path, 'output/log.txt'), 'w') as f:  
+        f.write(f"train dataset: {data_dir}\n")  
+        f.write(f"train ratios: {train_ratios}")  
+    # Define the path for saving the YAML file  
+    save_path_yaml = os.path.join(save_path, 'output', 'args.yaml')  
+    
+    # Make sure the output directory exists  
+    os.makedirs(os.path.dirname(save_path_yaml), exist_ok=True)  
+    
+    # Save the arguments to YAML  
+    save_args_to_yaml(args, save_path_yaml) 
     # 模型初始化
-    model = initialize_model(args, len(train_dataset.classes[0]), args.arch, train_ratios)
+    model = initialize_model(args, len(train_dataset.classes[0]))
     model.to(device)
 
     # 加载已有模型
     if gl.get_value('train_model') is not None:
-        save_modelpath = 'save_model/'+gl.get_value('train_model')
-        existing_model_path = os.path.join(save_modelpath, f"{args.arch}checkpoint.pth.tar")
+        existing_model_path = gl.get_value('train_model')
         best_prec = load_existing_model(model, existing_model_path, args.print_queue)
     else:
         best_prec = 0
@@ -152,7 +193,8 @@ def run_training(args, data_dir, train_ratios):
         best_prec = max(val_prec, best_prec)
         save_checkpoint({
             'epoch': epoch + 1,
-            'arch': args.arch,
+            'selected_features': args.selected_features,
+            'fusion_mode': args.fusion_mode,
             'state_dict': model.state_dict(),
             'best_prec': best_prec,
             'optimizer': optimizer.state_dict(),
@@ -194,7 +236,7 @@ def run_testing(args, testInfo):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     args.print_queue.put(f"Device being used: {device}")
     args.device = device
-    args.is_test = True
+    
     # Load test dataset
     test_dataset = MultiViewDataset(
         num_features=5,
@@ -216,22 +258,42 @@ def run_testing(args, testInfo):
     args.print_queue.put(f"Testing using architecture: {model_architecture}")
     criterion = nn.CrossEntropyLoss().to(device)
 
-    model_dir = args.model
-    available_models = sorted(
-        (os.path.join(model_dir, file) for file in os.listdir(model_dir)),
-        key=os.path.getmtime,
-    )
-    model_dirs = sorted(filter(lambda path: testInfo[1][0] in path, available_models))
-    model_type = testInfo[1][0].split('/')[-1].split('_')[0] + '_' + testInfo[1][0].split('/')[-1].split('_')[1] 
-    best_model_path = os.path.join(model_dirs[-1], model_type+"_model_best.pth.tar")
+    model_dir = args.model_path
+    available_models = []
+    # Define a regex pattern for matching YYYY-MM-DD_HH-MM-SS format  
+    date_pattern = r'^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$'  
+
+    # Walk through the directory tree  
+    for root, dirs, files in os.walk(model_dir):  
+        for dir_name in dirs:  
+            # Check if the directory name matches the date pattern  
+            if re.match(date_pattern, dir_name):  
+                # Construct the full path to the directory  
+                full_path = os.path.join(root, dir_name)  
+                available_models.append(full_path)  
+    model_dirs = sorted(filter(lambda path: testInfo[1][0] in path, available_models))[0]
+    # Define the path for the YAML file  
+    yaml_path = os.path.join(model_dirs, 'output', 'args.yaml')  
+
+    # Check if the YAML file exists  
+    if os.path.isfile(yaml_path):  
+        # Load the YAML file  
+        yaml_data = load_yaml_to_dict(yaml_path)  
+        
+        # Update the args with values from the YAML  
+        update_args_from_yaml(args, yaml_data)  
+    args.is_test = True
+    best_model_path = os.path.join(model_dirs, "model_best.pth.tar")
+
 
     if not os.path.exists(best_model_path):
         args.print_queue.put("Model not found!")
         return
         # Load the best model
     model_info = torch.load(best_model_path)
-    args.print_queue.put(f"Loaded model from: {model_dirs[-1]}")
-    model = initialize_model(args, len(test_dataset.classes[0]), model_type, testInfo[0])
+    args.print_queue.put(f"Loaded model from: {model_dirs}")
+    
+    model = initialize_model(args, len(test_dataset.classes[0]))
 
     model.load_state_dict(model_info["state_dict"])
     model.to(device)
@@ -241,7 +303,7 @@ def run_testing(args, testInfo):
     args.print_queue.put(f"Total params: {sum(p.numel() for p in model.parameters()) / 1e6:.6f}M")
     args.print_queue.put(f"Best Accuracy: {model_info['best_prec']:.2f}%")
 
-    train_loss, train_acc, val_loss, val_acc = np.loadtxt(os.path.join(model_dirs[-1], "output", "curve.txt"))
+    train_loss, train_acc, val_loss, val_acc = np.loadtxt(os.path.join(model_dirs, "output", "curve.txt"))
     # Push metrics to queues
     args.loss_train.put(train_loss)
     args.acc_train.put(train_acc)
@@ -249,7 +311,7 @@ def run_testing(args, testInfo):
     args.acc_val.put(val_acc)
 
     # Log output
-    with open(os.path.join(model_dirs[-1], "output", "log.txt"), "r") as log_file:
+    with open(os.path.join(model_dirs, "output", "log.txt"), "r") as log_file:
         args.print_queue.put(log_file.read())
 
     # Perform validation/testing
@@ -258,9 +320,9 @@ def run_testing(args, testInfo):
         test_loader, len(test_dataset.classes[0]), model, criterion)
 
     # Save results
-    save_path = os.path.join(model_dirs[-1], "output")
-    np.savetxt(os.path.join(save_path, f"{os.path.basename(testInfo[0][0])}_errors.txt"), errors, fmt="%s")
-    np.savetxt(os.path.join(save_path, f"{os.path.basename(testInfo[0][0])}_confusion_matrix.txt"), confusion_matrix.T, fmt="%d")
+    save_path = os.path.join(model_dirs, "output")
+    np.savetxt(os.path.join(save_path, "errors.txt"), errors, fmt="%s")
+    np.savetxt(os.path.join(save_path, "confusion_matrix.txt"), confusion_matrix.T, fmt="%d")
     args.confusion_val.put(confusion_matrix)
 
     # Log final results

@@ -1,7 +1,7 @@
 # ---------------------------- #
 #          Training Params     #
 # ---------------------------- #
-epochs: 100                  # Number of training epochs
+epochs: 50                  # Number of training epochs
 lr: 5.0e-4                   # Learning rate
 lr_step: 10                  # Step size for learning rate decay
 batch_size: 10               # Batch size for training
@@ -13,8 +13,9 @@ is_test: false               # Flag to indicate if it's in test mode
 #          Model Params        #
 # ---------------------------- #
 model_path: './save_model/'  # Directory to save the model
+backbone: 'custom'
 arch: 'RT_CNN'               # Model architecture (e.g., RT_CNN)
-fusion_mode: "concatenate"   # Fusion mode for multi-view features (e.g., "concatenate", "alignment", "shared_specific")
+fusion_mode: "alignment"   # Fusion mode for multi-view features (e.g., "concatenate", "alignment", "shared_specific")
 alignment_type: "attention"  # In "alignment" mode use method (e.g. "attention", "mi", "adversarial", "graph")
 sharedspecific_method: "basic_shared" # In "shared_specific" mode use method (e.g. "basic_shared", "attention_enhanced", "adversarial_shared", "information_bottleneck", "graph_structured")
 
@@ -33,13 +34,15 @@ selected_features:
   - DT                        # Selected 2D feature (DT)
   - RDT                       # Selected 3D feature (RDT)
   - ERT                       # Selected 3D feature (ERT)
+  - ART
+
 
 input_feature_shapes:
-  RT: [1, 64, 64]             # Shape of RT feature (2D)
-  DT: [1, 64, 64]             # Shape of DT feature (2D)
-  RDT: [1, 10, 64, 64]        # Shape of RDT feature (3D, sequence length 10)
-  ERT: [1, 10, 64, 64]        # Shape of ERT feature (3D, sequence length 10)
-  ART: [1, 10, 64, 64]        # Shape of ART feature (3D, sequence length 10)
+  RT: [1, 48, 64]             # Shape of RT feature (2D)
+  DT: [1, 12, 64]             # Shape of DT feature (2D)
+  RDT: [12, 1, 64, 64]        # Shape of RDT feature (3D, sequence length 10)
+  ERT: [12, 1, 91, 64]        # Shape of ERT feature (3D, sequence length 10)
+  ART: [12, 1, 91, 64]        # Shape of ART feature (3D, sequence length 10)
 
 # ---------------------------- #
 #      Class Mapping (Labels)  #
@@ -53,3 +56,14 @@ class_mapping:
   5: Right
   6: Up
   7: Unknown
+
+
+# ---------------------------- #
+#      不要改动这个  #
+# ---------------------------- #
+optional_features:
+  - ART    
+  - DT                       
+  - ERT                       
+  - RDT                       
+  - RT 

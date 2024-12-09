@@ -92,6 +92,6 @@ class MultiViewDataset(Dataset):
         rt_feature = load_and_expand('RT')
 
         label = torch.tensor([target_class], dtype=torch.long)
-        dataset_label = torch.tensor([target_dataset % 5], dtype=torch.long)
+        dataset_label = torch.tensor([target_dataset], dtype=torch.long)
 
         return art_feature, dt_feature, ert_feature, rdt_feature, rt_feature, label, file_path, dataset_label

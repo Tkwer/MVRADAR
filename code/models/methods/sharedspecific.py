@@ -2,17 +2,21 @@ import torch
 import torch.nn as nn
 
 # Basic Shared Model
-class BasicSharedModel(nn.Module):
-    def __init__(self, feature_dim):
-        super(BasicSharedModel, self).__init__()
-        self.shared_layer = nn.Linear(feature_dim, feature_dim)
+class BasicSharedSpecificModel(nn.Module):
+    def __init__(self, feature_dim, num_views):
+        super(BasicSharedSpecificModel, self).__init__()
+        self.shared_layer = nn.Linear(num_views*feature_dim, feature_dim)
+        self.specific_layer = nn.Linear(num_views*feature_dim, feature_dim)
+        self.fusion_layer = nn.Linear(2*feature_dim, feature_dim)
 
     def forward(self, x_list):
         # Concatenate inputs from all views
-        shared_input = torch.cat(x_list, dim=-1)
+        input = torch.cat(x_list, dim=-1)
         # Pass through shared layer
-        shared_output = self.shared_layer(shared_input)
-        return shared_output
+        shared_output = self.shared_layer(input)
+        specific_output = self.specific_layer(input)
+        output = self.fusion_layer(torch.cat([shared_output,specific_output], dim=-1))
+        return output
 
 # Attention-Enhanced Model
 class AttentionEnhancedModel(nn.Module):

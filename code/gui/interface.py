@@ -12,6 +12,7 @@ import sys
 import time
 import itertools
 import numpy as  np
+from datetime import datetime  
 import matplotlib.pyplot as plt
 from pyqtgraph import GraphicsLayoutWidget
 from PySide6.QtCore import Signal
@@ -20,6 +21,29 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtWidgets import QSizePolicy, QMessageBox
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
+
+
+def find_model_best_files(base_path):  
+    """  
+    遍历给定的基路径，列出所有包含 'model_best.pth.tar' 文件的路径，并输出其对应的基础文件夹名。  
+
+    参数:  
+    base_path (str): 要搜索的基础文件夹路径。  
+
+    返回:  
+    list: 包含所有找到的 'model_best.pth.tar' 文件路径及其基础文件夹名的列表。  
+    """  
+    model_best_files = []  
+    
+    # 遍历所有子目录  
+    for dirpath, dirnames, filenames in os.walk(base_path):  
+        # 检查当前目录下是否存在 'model_best.pth.tar'  
+        if 'model_best.pth.tar' in filenames:  
+            # 获取基础文件夹名  
+            base_folder = os.path.basename(dirpath)  
+            model_best_files.append((os.path.join(dirpath, 'model_best.pth.tar'), base_folder))  
+    
+    return model_best_files 
 
 def get_file_list(dir,Filelist):
     newDir=dir
@@ -53,6 +77,174 @@ class MyComboBox(QtWidgets.QComboBox):
         self.clicked.emit()         #弹出前发送信号
         super(MyComboBox, self).showPopup()     # 调用父类的showPopup()
 
+
+class HierarchicalComboCheckBox(QtWidgets.QComboBox):
+    arrowselected = Signal(dict)  # 改为发出字典类型信号
+
+    def __init__(self, parent=None, items: dict = None):
+        super().__init__(parent)
+        self.setParent(parent)
+        # items 格式: { "parent": None or [children], ...}
+        self.items = items if items else {}
+        
+        # 数据结构存储 (pbox:父复选框, cboxes:子复选框列表)
+        self.parent_boxes = []
+        
+        # 行编辑框
+        self.text = QtWidgets.QLineEdit()
+        self.text.setReadOnly(True)
+        self.setLineEdit(self.text)
+        
+        # 初始化视图
+        self._init_view()
+
+    def _init_view(self):
+        self.list_widget = QtWidgets.QListWidget()
+        
+        for parent_name, children_list in self.items.items():
+            parent_checkbox = QtWidgets.QCheckBox(parent_name)
+            
+            # 父选项加入列表项
+            parent_item = QtWidgets.QListWidgetItem(self.list_widget)
+            self.list_widget.setItemWidget(parent_item, parent_checkbox)
+            
+            child_checkboxes = []
+            if children_list is not None:
+                # 创建子选项，并暂时置为 disabled
+                for child in children_list:
+                    child_checkbox = QtWidgets.QCheckBox("    " + child)  # 缩进显示
+                    child_checkbox.setEnabled(False)
+                    child_item = QtWidgets.QListWidgetItem(self.list_widget)
+                    self.list_widget.setItemWidget(child_item, child_checkbox)
+                    # 信号连接 - 子项状态变化
+                    child_checkbox.stateChanged.connect(self._children_state_changed)
+                    child_checkboxes.append(child_checkbox)
+            
+            # 父项状态变化信号连接
+            parent_checkbox.stateChanged.connect(self._parent_state_changed)
+            
+            self.parent_boxes.append((parent_checkbox, child_checkboxes))
+        
+        self.setModel(self.list_widget.model())
+        self.setView(self.list_widget)
+
+    def _parent_state_changed(self, state):
+        # state: 0-Unchecked, 2-Checked
+        sender = self.sender()
+        
+        # 如果当前父类被选中则取消其他父类的选中状态及其子项
+        if state == 2: 
+            self._uncheck_others(sender)
+        
+        # 对所有父类迭代，启用/禁用其子类
+        for (pbox, cboxes) in self.parent_boxes:
+            if pbox is sender:
+                # 当前父选项选中时启用子项，否则禁用
+                if state == 2:
+                    for cb in cboxes:
+                        cb.setEnabled(True)
+                else:
+                    for cb in cboxes:
+                        cb.setEnabled(False)
+                        cb.setChecked(False)
+            else:
+                # 非当前父项取消选中且子项禁用
+                if sender.isChecked():
+                    pbox.setChecked(False)
+                    for cb in cboxes:
+                        cb.setEnabled(False)
+                        cb.setChecked(False)
+        
+        self._update_display()
+
+    def _children_state_changed(self, state):
+        # 子项互斥：当一个子项被选中时，取消同父类其他子项的选中
+        sender = self.sender()
+        if state == 2:  # 选中
+            for (pbox, cboxes) in self.parent_boxes:
+                if sender in cboxes:
+                    for cb in cboxes:
+                        if cb is not sender and cb.isChecked():
+                            cb.setChecked(False)
+                    break
+        
+        self._update_display()
+
+    def _uncheck_others(self, current_parent_checkbox):
+        # 当选中一个父类时，取消其他父类及其子选项的选中
+        for (pbox, cboxes) in self.parent_boxes:
+            if pbox is not current_parent_checkbox:
+                pbox.setChecked(False)
+                for cb in cboxes:
+                    cb.setEnabled(False)
+                    cb.setChecked(False)
+
+    def _update_display(self):
+        # 更新行编辑框显示
+        selected_parent = None
+        selected_children = []
+
+        # 找出选中的父类及子类
+        for (pbox, cboxes) in self.parent_boxes:
+            if pbox.isChecked():
+                selected_parent = pbox.text().strip()
+                # 有子类的父类
+                if cboxes:
+                    for cb in cboxes:
+                        if cb.isChecked():
+                            selected_children.append(cb.text().strip())
+                break
+        
+        self.text.clear()
+        
+        # 显示逻辑：父类一定显示，如果无子类则只显示父类；有子类时显示父类和已选子类
+        if selected_parent:
+            if len(selected_children) > 0:
+                display_text = f"{selected_parent}: " + "; ".join(selected_children)
+            else:
+                display_text = selected_parent
+            self.text.setText(display_text)
+        
+        # 发出信号
+        self.arrowselected.emit(self.get_selected())
+
+    def get_selected(self) -> dict:
+        """
+        返回一个字典:
+        如果有父类被选中，则 { "selected_parent": [选中的子类列表] }
+        如果父类无子类或未选择子类，则列表为空。
+        如果没有父类被选中，则返回 {}
+        """
+        result = {}
+        for (pbox, cboxes) in self.parent_boxes:
+            if pbox.isChecked():
+                parent_name = pbox.text().strip()
+                if cboxes:
+                    chosen_children = [cb.text().strip() for cb in cboxes if cb.isChecked()]
+                    result[parent_name] = chosen_children
+                else:
+                    # 无子类则返回空列表
+                    result[parent_name] = []
+                break
+        return result
+
+    def update_items(self, items: dict):
+        """
+        更新列表数据
+        """
+        self.items = items
+        self.parent_boxes = []
+        self.list_widget.clear()
+        self._init_view()
+
+    def clear_all(self):
+        # 清空所有选中状态
+        for (pbox, cboxes) in self.parent_boxes:
+            pbox.setChecked(False)
+            for cb in cboxes:
+                cb.setEnabled(False)
+                cb.setChecked(False)
+        self._update_display()
 
 class ComboCheckBox(QtWidgets.QComboBox):
     arrowselected = Signal(list)
@@ -151,10 +343,8 @@ class ComboCheckBox(QtWidgets.QComboBox):
         ret = '; '.join(self.get_selected())
         self.text.setText(ret)
 
-
-
 class ViolationItem(QtWidgets.QListWidget):
-    def __init__(self, parent=None, radioBtnname='test', download_path='',default_radio=0.8, textEditwidget=None):
+    def __init__(self, trandir, train_ratio, parent=None, radioBtnname='test', download_path='',default_radio=0.8, textEditwidget=None):
         super(ViolationItem, self).__init__(parent)
         self.layoutWidget = QtWidgets.QWidget(self)
         self.layoutWidget.resize(320,40)
@@ -166,8 +356,8 @@ class ViolationItem(QtWidgets.QListWidget):
         self.radioButton = QtWidgets.QRadioButton(self.layoutWidget)
         self.radioButton.setObjectName("radioButton")
         self.radioButton.setText(radioBtnname)
-        self.trandir = []
-        self.train_ratio = []
+        self.trandir = trandir
+        self.train_ratio = train_ratio
 
         self.file_folder = download_path+'/'+ radioBtnname
         filelist = [[] for i in range(5)]#5代表5个特征
@@ -202,18 +392,21 @@ class ViolationItem(QtWidgets.QListWidget):
         self.horizontalSlider.setValue(int(self.lineEdit.text()))
 
     def radbtnSelected(self, name, string):
+        # print(f"Before: trandir = {self.trandir}") 
         if(self.radioButton.isChecked()):
             self.trandir.append(self.file_folder)
             self.train_ratio.append(self.horizontalSlider.value()/self.horizontalSlider.maximum())
         else:
             self.train_ratio.pop(self.trandir.index(self.file_folder))
             self.trandir.remove(self.file_folder)
+         
         gl.set_value('train_and_vali_data_dir',self.trandir)
         gl.set_value('train_ratio',self.train_ratio)
         printf_str =''
         for trandir_ in self.trandir:
             printf_str = printf_str + os.path.basename(trandir_)+', '+str(self.train_ratio[self.trandir.index(trandir_)]*100)+'%'
         printlog(name,'select dataset:'+printf_str)
+        # print(f"After: trandir = {self.trandir}") 
 
 
 class MplCanvas(FigureCanvasQTAgg):
@@ -373,6 +566,8 @@ class Ui_MainWindow(object):
         self.centralwidget.setObjectName("centralwidget")
         self.model_path = model_path
         self.radio = default_ratio
+        self.trandir =[]
+        self.train_ratio =[]
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
         self.gridLayout.setObjectName("gridLayout")
         self.tabWidget = QtWidgets.QTabWidget(self.centralwidget)
@@ -445,16 +640,8 @@ class Ui_MainWindow(object):
         self.line_17.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.line_17.setObjectName("line_17")
         self.horizontalLayout_11.addWidget(self.line_17)
-        self.comboBox_5 = QtWidgets.QComboBox(self.groupBox_3)
+        self.comboBox_5 = ComboCheckBox(self.groupBox_3, ['RT', 'DT', 'ART', 'ERT', 'RDT'])
         self.comboBox_5.setObjectName("comboBox_5")
-        self.comboBox_5.addItem("")
-        self.comboBox_5.addItem("")
-        self.comboBox_5.addItem("")
-        self.comboBox_5.addItem("")
-        self.comboBox_5.addItem("")
-        self.comboBox_5.addItem("")
-        self.comboBox_5.addItem("")
-        self.comboBox_5.addItem("")
         self.horizontalLayout_11.addWidget(self.comboBox_5)
         self.label_14 = QtWidgets.QLabel(self.groupBox_3)
         self.label_14.setObjectName("label_14")
@@ -464,9 +651,14 @@ class Ui_MainWindow(object):
         self.line_16.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.line_16.setObjectName("line_16")
         self.horizontalLayout_11.addWidget(self.line_16)
-        self.comboBox_4 = QtWidgets.QComboBox(self.groupBox_3)
+        method_dict = {
+                    "concatenate": None, 
+                    "alignment": ["attention", "mi", "adversarial", "graph"], 
+                    "shared_specific": ["basic_shared", "attention_enhanced", "adversarial_shared", "information_bottleneck", "graph_structured"]
+                }
+        self.comboBox_4 = HierarchicalComboCheckBox(self.groupBox_3, method_dict)
+
         self.comboBox_4.setObjectName("comboBox_4")
-        self.comboBox_4.addItem("CNN")
         self.horizontalLayout_11.addWidget(self.comboBox_4)
         self.verticalLayout_4.addLayout(self.horizontalLayout_11)
         self.horizontalLayout_14 = QtWidgets.QHBoxLayout()
@@ -477,10 +669,7 @@ class Ui_MainWindow(object):
         self.pushButton_8.setObjectName("pushButton_8")
         self.comboBoxs = MyComboBox(self.groupBox_3)
 
-        all_model = os.listdir(self.model_path)
-        all_model = sorted(all_model,key=lambda x: os.path.getmtime(os.path.join(self.model_path, x)))# 按时间排序
-        self.comboBoxs.addItem('select')
-        self.comboBoxs.addItems(all_model)
+
 
         self.horizontalLayout_14.addWidget(self.comboBoxs)
         self.horizontalLayout_14.addWidget(self.pushButton_8)
@@ -509,10 +698,15 @@ class Ui_MainWindow(object):
     
         self.comboBox_7 = MyComboBox(self.groupBox_3)
         self.comboBox_7.setMaximumWidth(100)
+        self.comboBoxs.setMaximumWidth(100)
         self.comboBox_7.setObjectName("comboBox_7")
-        all_model = os.listdir(model_path)
-        all_model = sorted(all_model,key=lambda x: os.path.getmtime(os.path.join(model_path, x)))# 按时间排序
-        self.comboBox_7.addItems(all_model)
+        model_best_files = find_model_best_files(self.model_path)
+  
+        model_best_files.sort(key=lambda x: datetime.strptime(x[1], '%Y-%m-%d_%H-%M-%S')) 
+        for model_file, folder_name in model_best_files:  
+            self.comboBox_7.addItem(folder_name)  # 添加基础文件夹名
+            self.comboBox_7.setItemData(self.comboBox_7.count() - 1, model_file)  
+            self.comboBoxs.addItem(model_file)
         self.horizontalLayout_19.addWidget(self.comboBox_7)
         self.pushButton_9 = QtWidgets.QPushButton(self.groupBox_3)
         self.pushButton_9.setObjectName("pushButton_9")
@@ -965,13 +1159,13 @@ class Ui_MainWindow(object):
         self.pushButton_8.clicked.connect(self.startTraining)
         self.pushButton_7.clicked.connect(self.changeMatrix)
         self.comboBox_2.currentIndexChanged.connect(self.selectionChange)
-        self.comboBox_4.currentIndexChanged.connect(self.selectionMethod)
+        self.comboBox_4.arrowselected.connect(self.selectionMethod)
         # self.comboBox_5.currentIndexChanged.connect(self.selectionMethod)
-        self.comboBox_6.arrowselected.connect(self.selectionTestdataset)
+        self.comboBox_6.arrowselected.connect(lambda:self.selectionTestdataset(None))
         self.comboBox_7.currentIndexChanged.connect(lambda:self.selectionTestdataset(None))
         self.comboBoxs.currentIndexChanged.connect(self.selectiontrainmodel)
         # self.comboBox_7.
-        self.comboBox_5.activated.connect(self.selectionFeature)
+        self.comboBox_5.arrowselected.connect(self.selectionFeature)
         
         self.horizontalSlider.valueChanged.connect(self.valChange)
         # self.horizontalSlider_2.valueChanged.connect(self.changeTraindatasetpre)
@@ -979,20 +1173,32 @@ class Ui_MainWindow(object):
         self.horizontalSlider.actionTriggered['int'].connect(self.lcdNumber.setDecMode)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
-    def selectionTestdataset(self,testdata):
-        all_model = os.listdir(self.model_path)
-        all_model = sorted(all_model,key=lambda x: os.path.getmtime(os.path.join(self.model_path, x)))# 按时间排序
-        print(self.comboBox_7.count())
-        if (self.comboBox_7.count()!=len(all_model)):
+    def selectionTestdataset(self, testdata): 
+        
+        model_best_files = find_model_best_files(self.model_path)
+        model_best_files.sort(key=lambda x: datetime.strptime(x[1], '%Y-%m-%d_%H-%M-%S')) 
+
+        # 获取当前选择的路径  
+        current_index = self.comboBox_7.currentIndex()  
+        if current_index >= 0:  
+            # 获取对应的完整路径作为工具提示  
+            full_path = self.comboBox_7.itemData(current_index)  
+            self.comboBox_7.setToolTip(full_path)
+
+        # print(gl.get_value('data_path1'))
+        if (self.comboBox_7.count()!=len(model_best_files)):
             if(self.comboBox_7.count()==0):
-                self.comboBox_7.addItems(all_model)
+                
+                for model_file, folder_name in model_best_files:  
+                    self.comboBox_7.addItem(folder_name)  # 添加基础文件夹名
+                    self.comboBox_7.setItemData(self.comboBox_7.count() - 1, model_file)  
             else:
-                self.comboBox_7.addItem(all_model[-1])
-        # self.comboBox_7.clear()
-        # self.comboBox_7.addItems(all_model)
+                self.comboBox_7.addItem(model_best_files[-1][1])
+
         if len(self.comboBox_6.get_ret()) and len(self.comboBox_7.currentText()):
             # [[] for i in range(5)]
             gl.set_value('test_data_dir_and_model',[[gl.get_value('data_path1')+'/'+testdata1 for testdata1 in self.comboBox_6.get_ret()],[self.comboBox_7.currentText()]])
+            # print(gl.get_value('test_data_dir_and_model'))
             printlog(self.textEdit,'test_data_dir_and_model:'+str(self.comboBox_6.get_ret())+','+self.comboBox_7.currentText(),fontcolor='chocolate')
     
     def selectiontrainmodel(self):
@@ -1000,32 +1206,17 @@ class Ui_MainWindow(object):
         printlog(self.textEdit,'selecttrainmodel:'+gl.get_value('train_model'),fontcolor='chocolate')
 
     def selectionMethod(self):
-        if len(self.comboBox_4.currentText()):
-            gl.set_value('recognize_method',self.comboBox_5.currentText()+'_'+self.comboBox_4.currentText())
-            printlog(self.textEdit,'selectMethod:'+gl.get_value('recognize_method'),fontcolor='chocolate')
+        if len(self.comboBox_4.get_selected()):
+            gl.set_value('selected_features', self.comboBox_5.get_ret())
+            gl.set_value('fusion_mode', self.comboBox_4.get_selected())
+            printlog(self.textEdit,'selected_features:'+str(self.comboBox_5.get_ret()),fontcolor='chocolate')
+            printlog(self.textEdit,'fusion_mode:'+str(self.comboBox_4.get_selected()),fontcolor='chocolate')
 
 # 在此添加自己的模型下拉菜单，要结合特征选择，最终会组成 feature_model的形式
     def selectionFeature(self):
-        s = self.comboBox_5.currentText()
-        self.comboBox_4.clear()
-        if s == "RT":
-            self.comboBox_4.addItem('CNN')  
-        elif s == "DT":
-            self.comboBox_4.addItem('CNN')  
-        elif s == "RDT":
-            self.comboBox_4.addItem('CNN-LSTM')
-        elif s == "ART":
-            self.comboBox_4.addItem('CNN-LSTM')    
-        elif s == "ERT":
-            self.comboBox_4.addItem('CNN-LSTM')   
-        elif s == "RT+DT+ART":
-            self.comboBox_4.addItem('MFFNet')  
-        elif s == "ALL":
-            self.comboBox_4.addItems(['MFFNet','SE-MFFNet','ECA-MFFNet','KA-SE-MFFNet','KA-ECA-MFFNet']) 
-        elif s == "F-DATA":
-            self.comboBox_4.addItems(['Fuzzy-CNN-LSTM','Fuzzy-CNN-LSTM_V2']) 
-        else:
-            self.comboBox_4.addItem("请重选")
+        s = self.comboBox_5.get_ret()
+        # if len(s)<2:
+        #     self.comboBox_4.addItem("请选择两个特征及以上")
         # gl.set_value('recognize_method',self.comboBox_4.currentText())
         # printlog(self.textEdit,self.comboBox_4.currentText(),fontcolor='yellow')
 
@@ -1078,13 +1269,14 @@ class Ui_MainWindow(object):
         self.comboBox_6.update(sorted(list))
 
         for data in sorted(list):   
-            listWidget = ViolationItem(radioBtnname=data,download_path=download_path, default_radio=self.radio, textEditwidget = self.textEdit)
+            listWidget = ViolationItem(radioBtnname=data,trandir=self.trandir,train_ratio=self.train_ratio,download_path=download_path, default_radio=self.radio, textEditwidget = self.textEdit)
             listWidgetItem = QtWidgets.QListWidgetItem(self.listView)
             listWidgetItem.setSizeHint(QtCore.QSize(self.listView.width()-30, 40))
             self.listView.addItem(listWidgetItem)
             self.listView.setItemWidget(listWidgetItem, listWidget)
 
             
+
 
     def changeTraindatasetpre(self):
         self.lineEdit_3.setText(str(self.horizontalSlider_2.value()))
@@ -1126,14 +1318,6 @@ class Ui_MainWindow(object):
         self.pushButton_5.setText(_translate("MainWindow", "open"))
         self.groupBox_4.setTitle(_translate("MainWindow", "Train/Validate Dataset:"))
         self.label_15.setText(_translate("MainWindow", "Feature:"))
-        self.comboBox_5.setItemText(0, _translate("MainWindow", "RT"))
-        self.comboBox_5.setItemText(1, _translate("MainWindow", "DT"))
-        self.comboBox_5.setItemText(2, _translate("MainWindow", "RDT"))
-        self.comboBox_5.setItemText(3, _translate("MainWindow", "ART"))
-        self.comboBox_5.setItemText(4, _translate("MainWindow", "ERT"))
-        self.comboBox_5.setItemText(5, _translate("MainWindow", "RT+DT+ART"))
-        self.comboBox_5.setItemText(6, _translate("MainWindow", "ALL"))
-        self.comboBox_5.setItemText(7, _translate("MainWindow", "F-DATA"))
         self.label_14.setText(_translate("MainWindow", "Method:"))
         self.label_23.setText(_translate("MainWindow", "color:"))
         self.pushButton_8.setText(_translate("MainWindow", "Start"))

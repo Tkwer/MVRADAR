@@ -68,7 +68,11 @@ class FeatureEncoder2D(nn.Module):
         """
         Compute the output size of the feature extractor for a given input shape.
         """
-        C, H, W = input_feature_shape
+        C, *rest = input_feature_shape
+        if len(rest) == 2:
+            H, W = rest
+        elif len(rest) == 3:    
+            C, H, W = rest
         dummy_input = torch.randn(1, C, H, W)  # Create a dummy input tensor
         with torch.no_grad():
             output = self.feature_extractor(dummy_input)

@@ -13,7 +13,6 @@ import matplotlib.pyplot as plt
 from bin.train import TrainRunner
 from bin.train import TestRunner
 
-
 def get_color_list(color_combo_box):  
     """  
     获取颜色映射表列表并填充下拉框  
@@ -69,7 +68,7 @@ def update_display_features():
 
     # 加载所有图像数据 
     dti_data = np.load(file_list[0][sample_index])
-    rti_data  = np.load(file_list[1][sample_index])
+    rti_data = np.load(file_list[1][sample_index])
     rdi_data = np.load(file_list[2][sample_index])
     rai_data = np.load(file_list[3][sample_index])
     rei_data = np.load(file_list[4][sample_index])
@@ -123,10 +122,15 @@ def start_training(args):
     """
     train_and_vali_data_dir = gl.get_value('train_and_vali_data_dir')
     train_ratio = gl.get_value('train_ratio')
-    recognize_method = gl.get_value('recognize_method')
-    if recognize_method is not None:
-        args.arch = recognize_method
-    if train_and_vali_data_dir and args.arch:
+    selected_features = gl.get_value('selected_features')
+    fusion_mode = gl.get_value('fusion_mode')
+    if selected_features is not None and fusion_mode is not None:
+        args.selected_features = selected_features
+        for parent, children in fusion_mode.items():
+            args.fusion_mode = parent  # 父类名
+            args.method = children[0] if children else None  # 只取第一个子类，如果无子类为 None
+
+    if train_and_vali_data_dir and args.fusion_mode and args.method:
         collector = TrainRunner('Listener', train_and_vali_data_dir, train_ratio, args)
         collector.start()
         update_train_progress(args)
@@ -332,7 +336,7 @@ def application(args):
 
 # 读取 YAML 文件
 def load_config(yaml_path):
-    with open(yaml_path, 'r') as file:
+    with open(yaml_path, 'r', encoding='utf-8') as file:
         return yaml.safe_load(file)
 
 if __name__ == '__main__':

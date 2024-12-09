@@ -1,22 +1,21 @@
 import torch
-from torch.autograd import Variable
-import numpy as np
 from utils.helpers import AverageMeter, minmaxscaler
 from bin.ride_augmentation import ride_augmentation
 from utils.common import accuracy, confusion_matrix_compute
 
 def train_model(args, train_loader, model, num_classes, criterion, optimizer, epoch):
     """
-    Train the model for one epoch.
+    Train the MultiViewFeatureFusion model for one epoch.
+
     Args:
+        args: Arguments containing configurations and hyperparameters.
         train_loader: DataLoader for training data.
-        model: Model to be trained.
+        model: MultiViewFeatureFusion model to be trained.
         num_classes: Number of output classes.
         criterion: Loss function.
         optimizer: Optimizer for training.
         epoch: Current epoch number.
-        device: Device to run the training (CPU or GPU).
-        log_queue: Queue to log training details.
+
     Returns:
         train_loss: Average training loss.
         train_accuracy: Average training accuracy.
@@ -25,37 +24,60 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
     # Initialize metrics
     loss_tracker = AverageMeter()
     accuracy_top1 = AverageMeter()
-    accuracy_top5 = AverageMeter()
 
     model.train()
     confusion_matrix = torch.zeros(num_classes, num_classes).to(args.device)
 
     for batch_idx, data in enumerate(train_loader):
-        # Unpack and move data to device
-        features, targets, domain_labels = [
-            [d.to(args.device) for d in data[:-3]],
-            data[-3].to(args.device),
-            data[-1].to(args.device)
-        ]
+        # Unpack data: data[0] is a list of feature tensors, data[1] is the target labels
+        features_list, targets, domain_labels = [
+            [d.to(args.device) for d in data[:-3]], data[-3],data[-1]]
+        
+        targets = targets.to(args.device)
 
-        # Apply RIDE augmentation every 20 batches
+        # Apply RIDE augmentation every 20 batches (optional)
         if batch_idx % 20 == 0:
-            features = ride_augmentation(*features)
+            features_list = ride_augmentation(*features_list)
             args.print_queue.put("--RIDE Applied--")
 
+        # Create a features dictionary mapping feature names to tensors
+        features_dict = {
+            feature_name: feature
+            for feature_name, feature in zip(args.optional_features, features_list)
+        }
+        # 从 features_dict 中选择名在 args.selected_features 中的特征  
+        selected_features_dict = {  
+            feature_name: features_dict[feature_name]  
+            for feature_name in model.selected_features  
+            if feature_name in features_dict  
+        }  
         # Normalize features
-        features = [minmaxscaler(f) for f in features]
-
-        # Convert inputs and targets to Variables
-        input_vars = [Variable(f, requires_grad=True) for f in features]
-        target_var = Variable(targets)
-        domain_label_var = Variable(domain_labels)
-
-        # Calculate alpha for domain adaptation
-        progress = float(epoch) / (args.epochs)
-        alpha = (2.0 / (1.0 + np.exp(-10 * progress)) - 1.0) * 0.8
+        selected_features_dict = {k: minmaxscaler(v) for k, v in selected_features_dict.items()}
 
         # Forward pass
-        outputs = model(*input_vars)
+        outputs = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
 
+        # Compute loss
         optimizer.zero_grad()
+        loss = criterion(outputs, targets.squeeze(dim=1))
+        loss_tracker.update(loss.item(), targets.size(0))
+
+        # Backpropagation
+        loss.backward()
+        optimizer.step()
+
+        # Compute accuracy and confusion matrix
+        prec1 = accuracy(outputs.cpu(), targets.cpu(), topk=(1,))[0]
+        predictions = torch.argmax(outputs, dim=1)
+        confusion_matrix = confusion_matrix_compute(predictions.cpu(), targets.cpu(), confusion_matrix)
+        accuracy_top1.update(prec1.item(), targets.size(0))
+
+        # Log training progress
+        args.print_queue.put(
+            f"Epoch: [{epoch}][{batch_idx}/{len(train_loader)}] "
+            f"LR: {optimizer.param_groups[-1]['lr']:.5f} "
+            f"Loss: {loss_tracker.val:.4f} ({loss_tracker.avg:.4f}) "
+            f"Top1: {accuracy_top1.val:.3f} ({accuracy_top1.avg:.3f})"
+        )
+
+    return loss_tracker.avg, accuracy_top1.avg / 100, confusion_matrix.cpu().numpy()
