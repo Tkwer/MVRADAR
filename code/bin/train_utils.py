@@ -31,12 +31,13 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
     confusion_matrix = torch.zeros(num_classes, num_classes).to(args.device)
 
     for batch_idx, data in enumerate(train_loader):
+        
         # Unpack data: data[0] is a list of feature tensors, data[1] is the target labels
         features_list, targets, domain_labels = [
             [d.to(args.device) for d in data[:-3]], data[-3],data[-1]]
         
         targets = targets.to(args.device)
-
+        domain_labels = domain_labels.to(args.device)
         # Apply RIDE augmentation every 20 batches (optional)
         if batch_idx % 20 == 0:
             features_list = ride_augmentation(*features_list)
@@ -55,28 +56,38 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
         }  
         # Normalize features
         selected_features_dict = {k: minmaxscaler(v) for k, v in selected_features_dict.items()}
-        # 如果加标签损失
-        weights_label = torch.stack([torch.tensor([  
-            args.mv_feature_weights[target.item()][feature_name]   
-            for feature_name in model.selected_features])   
-                for target in targets]) 
-        
-        # Forward pass
-        outputs, weights,_ = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
 
-        # Compute loss
+        # Forward pass
+        outputs, weights, fused_features = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
         optimizer.zero_grad()
+        # Compute loss
         loss = criterion(outputs, targets.squeeze(dim=1))
-        # 1. pred_log_prob需要是log概率  
-        # 2. target_prob是概率分布  
-        # 3. reduction参数选择:  
-        #    - 'batchmean': 平均批次损失  
-        #    - 'sum': 总损失  
-        #    - 'none': 逐元素损失
-        weights_log = F.log_softmax(weights, dim=-1)  # 确保 weights 是对数概率分布
-        weights_label = F.softmax(weights_label, dim=-1)  # 确保 weights_label 是概率分布
-        kl_loss = F.kl_div(weights_log, weights_label.to(args.device), reduction='sum') 
-        loss = loss+kl_loss
+
+
+        # 如果加标签损失
+        if 1:
+            weights_label = torch.stack([torch.tensor([  
+                args.mv_feature_weights[target.item()][feature_name]   
+                for feature_name in model.selected_features])   
+                    for target in targets]) 
+            weights_log = F.log_softmax(weights, dim=-1)  # 确保 weights 是对数概率分布
+            weights_label = F.softmax(weights_label, dim=-1)  # 确保 weights_label 是概率分布
+            # 1. pred_log_prob需要是log概率  
+            # 2. target_prob是概率分布  
+            # 3. reduction参数选择:  
+            #    - 'batchmean': 平均批次损失  
+            #    - 'sum': 总损失  
+            #    - 'none': 逐元素损失
+            kl_loss = F.kl_div(weights_log, weights_label.to(args.device), reduction='sum') 
+            loss = loss + 0.5 * kl_loss
+
+        # 如果加域不变对抗学习 前向传播，设置 alpha 用于 GRL
+        if 0:
+            alpha = 0.1 + 0.9 * (epoch / args.epochs)  # 逐渐增大 alpha
+            domain_logits = model.domain_discriminator(fused_features, alpha)
+            adversarial_loss = criterion(domain_logits, domain_labels.squeeze(dim=1))
+            loss = loss + 0.2 * adversarial_loss
+
         loss_tracker.update(loss.item(), targets.size(0))
 
         # Backpropagation
