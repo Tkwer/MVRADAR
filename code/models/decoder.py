@@ -3,7 +3,6 @@ import torch.nn as nn
 from models.methods.alignment import (
     MultiViewAttentionAlignment,
     MultiViewMIAlignment,
-    AdversarialMultiViewAlignment,
     GraphMultiViewAlignment
 )
 from models.methods.sharedspecific import (
@@ -18,7 +17,6 @@ from models.methods.sharedspecific import (
 ALIGNMENT_FACTORIES = {
     'attention': lambda num_views, feature_dim: MultiViewAttentionAlignment(num_views, feature_dim),
     'mi': lambda num_views, feature_dim: MultiViewMIAlignment(num_views),
-    'adversarial': lambda num_views, feature_dim: AdversarialMultiViewAlignment(num_views, feature_dim),
     'graph': lambda num_views, feature_dim: GraphMultiViewAlignment(num_views, feature_dim)
 }
 
@@ -39,7 +37,8 @@ class MultiviewDecoder(nn.Module):
         self.mode = mode
         self.num_views = num_views
         self.feature_dim = feature_dim
-
+        # 为每个输入特征创建可学习的权重  
+ 
     def add_fusion(self, *x_list):
         # Dynamically sum features along the last dimension.
         # 确保 x_list 是一个包含张量的列表  
@@ -52,12 +51,11 @@ class MultiviewDecoder(nn.Module):
         # 对最后一个维度进行求和  
         return torch.sum(stacked_tensors, dim=0)  # 返回形状为 (batch_size, feature_dim)  
 
-
     def concat_fusion(self, *x_list):
         # Dynamically concatenate features along the last dimension.
         return torch.cat(x_list, dim=-1)
 
-    def alignment_fusion(self, *x_list):
+    def alignment_fusion(self, *x_list, target_domains=None):
         # Use alignment module for feature fusion
         views = list(x_list)
         return self.alignment(views)
@@ -92,7 +90,7 @@ class MultiviewDecoder(nn.Module):
         elif self.mode == 'concat':
             return self.concat_fusion(*x_list)
         elif self.mode == 'alignment':
-            return self.alignment_fusion(*x_list)
+            return self.alignment_fusion(*x_list, **kwargs)
         elif self.mode == 'shared_specific':
             return self.shared_specific_fusion(*x_list, **kwargs)
         else:
@@ -121,7 +119,7 @@ class ConcatDecoder(MultiviewDecoder):
         # 通过线性层输出  
         output = self.linear(fused_features)  
         
-        return output 
+        return output, None 
 
 
 class AlignmentDecoder(MultiviewDecoder):  
@@ -132,7 +130,7 @@ class AlignmentDecoder(MultiviewDecoder):
         super().__init__(feature_dim=feature_dim, num_views=num_views, mode='alignment')  
         if method not in ALIGNMENT_FACTORIES:  
             raise ValueError(f"Unknown alignment type: {method}")  
-        self.alignment_type = method  
+        self.method = method  
         self.alignment = ALIGNMENT_FACTORIES[method](num_views,feature_dim)  
 
     def forward(self, *x_list, **kwargs):  

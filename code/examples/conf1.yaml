@@ -2,7 +2,7 @@
 #          Training Params     #
 # ---------------------------- #
 epochs: 50                  # Number of training epochs
-lr: 5.0e-4                   # Learning rate
+lr: 5.0e-4                   # Learning rate 5e-4 对lr敏感，设置为1.0e-3后效果很差
 lr_step: 10                  # Step size for learning rate decay
 batch_size: 10               # Batch size for training
 workers: 0                   # Number of workers for data loading

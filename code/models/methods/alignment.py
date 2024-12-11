@@ -21,14 +21,14 @@ class GraphConvolution(nn.Module):
         return out  
 
 
-# MultiView 注意力对齐  
+# MultiView 线性注意力对齐  
 class MultiViewAttentionAlignment(nn.Module):  
     def __init__(self, num_views, feature_dim):  
         super().__init__()  
         # 每个视角的注意力权重模块  
         self.view_attention = nn.ModuleList([  
             nn.Sequential(  
-                nn.Linear(feature_dim, feature_dim),  
+                nn.Linear(feature_dim, 1),  
                 nn.Softmax(dim=-1)  
             ) for _ in range(num_views)  
         ])  
@@ -42,25 +42,27 @@ class MultiViewAttentionAlignment(nn.Module):
         每个视角形状为 (batch_size, feature_dim)  
         """  
         aligned_views = []  
+        view_weights =[]
         for i, view in enumerate(views):  
             # 每个视角的注意力加权计算  
-            view_weights = self.view_attention[i](view)  
-            aligned_view = view * view_weights  # (batch_size, feature_dim)  
+            view_weight = self.view_attention[i](view)  
+            aligned_view = view * view_weight  # (batch_size, feature_dim)  
             aligned_views.append(aligned_view)  
+            view_weights.append(view_weight)
 
         # 跨视角融合  
+        view_weights = torch.cat(view_weights, dim=-1)
         cross_view = torch.cat(aligned_views, dim=-1)  # (batch_size, feature_dim * num_views)  
         alignment = self.fusion(cross_view)  # (batch_size, feature_dim)  
 
-        return alignment  
+        return alignment, view_weights 
 
 
-# MultiView 互信息最大化对齐  
+# MultiView 互信息最大化对齐  在提取公共表征可以使用 互信息最大化对齐（构建对应的loss）
 class MultiViewMIAlignment(nn.Module):  
     def __init__(self, num_views):  
         super().__init__()  
-        # 初始化互信息权重  
-        self.mutual_info_weights = nn.Parameter(torch.ones(num_views))  
+
 
     def calculate_mi(self, x, y):  
         """  
@@ -92,66 +94,14 @@ class MultiViewMIAlignment(nn.Module):
 
         # 根据互信息加权调整每个视角  
         aligned_views = []  
+        view_weights =[]
         for i, view in enumerate(views):  
-            weight = torch.sum(mi_matrix[i]) * self.mutual_info_weights[i]  
-            aligned_views.append(view * weight)  
-
+            weight = torch.sum(mi_matrix[i])
+            aligned_views.append(view * weight) 
+            view_weights.append(weight) 
+        view_weights = torch.cat(view_weights, dim=-1)
         # 合并所有对齐后的视角  
-        return torch.mean(torch.stack(aligned_views), dim=0)  
-
-
-# MultiView 对抗性多视角对齐  
-class AdversarialMultiViewAlignment(nn.Module):  
-    def __init__(self, num_views, feature_dim):  
-        super().__init__()  
-        # 域判别器  
-        self.domain_discriminator = nn.Sequential(  
-            nn.Linear(feature_dim, feature_dim // 2),  
-            nn.ReLU(),  
-            nn.Linear(feature_dim // 2, num_views),  
-            nn.Softmax(dim=-1)  
-        )  
-
-        # 视角变换器  
-        self.view_transformers = nn.ModuleList([  
-            nn.Linear(feature_dim, feature_dim)  
-            for _ in range(num_views)  
-        ])  
-
-    def compute_adversarial_loss(self, domain_logits, target_domains):  
-        """  
-        计算对抗性损失：简单使用交叉熵损失  
-        """  
-        criterion = nn.CrossEntropyLoss()  # 使用标准的交叉熵损失  
-        return criterion(domain_logits, target_domains)  
-
-    def forward(self, views, target_domains):  
-        """  
-        views: 一个包含多个视角特征的列表  
-        每个视角形状为 (batch_size, feature_dim)  
-        target_domains: 域标签 (batch_size,)  
-        """  
-        # 对抗性变换  
-        transformed_views = [  
-            transformer(view)  
-            for transformer, view in zip(self.view_transformers, views)  
-        ]  
-
-        # 将所有视角特征拼接以进行域分类  
-        all_transformed = torch.cat(transformed_views, dim=0)  # 拼接后的形状 (num_views * batch_size, feature_dim)  
-        domain_logits = self.domain_discriminator(all_transformed)  # (num_views * batch_size, num_views)  
-
-        # 对抗性损失  
-        adversarial_loss = self.compute_adversarial_loss(domain_logits, target_domains)  
-
-        # 利用对抗性损失调整  
-        aligned_views = [  
-            view - adversarial_loss * view  
-            for view in transformed_views  
-        ]  
-
-        # 返回对齐后的视角  
-        return torch.mean(torch.stack(aligned_views), dim=0)  
+        return torch.mean(torch.stack(aligned_views) , dim=0) ,view_weights 
 
 
 # MultiView 图网络多视角对齐  

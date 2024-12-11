@@ -49,6 +49,7 @@ def initialize_model(args, num_classes):
         lstm_layers=args.lstm_layers,
         bidirectional=args.bidirectional,
         fc_size=args.fc_size,
+        num_domains=args.num_domains,
         input_feature_shapes=input_feature_shapes,
         fusion_mode=args.fusion_mode,
         method=method,
@@ -103,6 +104,7 @@ def run_training(args, data_dir, train_ratios):
     # 将device添加到metrics字典
     args.device = device
     args.is_test = False
+    args.num_domains = len(train_ratios) if isinstance(train_ratios, list) else 1
     # 数据加载
     train_dataset = MultiViewDataset(5, data_dir, train_ratios, 'train', args.class_mapping)
     val_dataset = MultiViewDataset(5, data_dir, [1 - x for x in train_ratios], 'vali', args.class_mapping)

@@ -17,9 +17,9 @@ class MultiViewSEAttention(nn.Module):
         views_tensor = torch.stack(views, dim=1) #形状为 (batch_size, num_views, feature_dim)
         view_weights = F.adaptive_avg_pool1d(views_tensor, 1).squeeze() #形状为 (batch_size, num_views)
         view_weights = self.fc_layers(view_weights)    #形状为 (batch_size, num_views)
-        aligned_views = views * view_weights.unsqueeze(-1)  
+        # aligned_views = views * view_weights.unsqueeze(-1)  
         # 简单拼s接或求平均  
-        return aligned_views
+        return aligned_views, view_weights
     
 class MultiViewECAAttention(nn.Module):
     def __init__(self, num_views, feature_dim, kernel_size=3):
@@ -36,10 +36,7 @@ class MultiViewECAAttention(nn.Module):
         """
         views: 长度为 num_views 的列表，每个视角的形状为 (batch_size, feature_dim)
         """
-        views_tensor = torch.stack(views, dim=1)  # 形状为 (batch_size, num_views, feature_dim)
-        
-        # 将特征维度移到最后一维，并使用卷积生成注意力权重
-        views_tensor = views_tensor.permute(0, 2, 1)  # (batch_size, feature_dim, num_views)
+        views_tensor = torch.stack(views, dim=-1)  # 形状为 (batch_size, feature_dim, num_views)
         
         # 使用1D卷积生成视角注意力权重
         view_weights = self.conv(views_tensor)  # (batch_size, 1, num_views)
@@ -47,9 +44,9 @@ class MultiViewECAAttention(nn.Module):
         view_weights = F.sigmoid(view_weights)  # (batch_size, num_views)
 
         # 直接使用 view_weights 来加权每个视角
-        aligned_views = views * view_weights.unsqueeze(-1)  # (batch_size, num_views, feature_dim)
-
-        return aligned_views
+        aligned_views = views_tensor * view_weights.unsqueeze(-1)  # (batch_size, feature_dim, num_views) 
+        aligned_views = aligned_views.sum(dim=-1)  # (batch_size, feature_dim) 
+        return aligned_views, view_weights
     
 class AdaptiveMultiViewAttention(nn.Module):
     def __init__(self, num_views, feature_dim):

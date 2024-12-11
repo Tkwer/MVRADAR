@@ -1,4 +1,5 @@
 import torch.nn as nn
+from models.methods.reverse_gradient import DomainAdversarialNetwork
 from models.encoder import FeatureEncoder2D, FeatureEncoder3D
 
 from models.decoder import (
@@ -12,7 +13,7 @@ class MultiViewFeatureFusion(nn.Module):
     A multi-view feature fusion network combining RT, DT (2D), and RDT, ERT, ART (3D) features.  
     """  
     def __init__(self, backbone="custom", cnn_output_size=128, hidden_size=128,   
-                 rnn_type='lstm', lstm_layers=1, bidirectional=True, fc_size=7,   
+                 rnn_type='lstm', lstm_layers=1, bidirectional=True, fc_size=7, num_domains = 5,  
                  input_feature_shapes=None, fusion_mode='concatenate', method='attention', 
                  bottleneck_dim=None, selected_features=None):  
         super(MultiViewFeatureFusion, self).__init__()  
@@ -64,7 +65,8 @@ class MultiViewFeatureFusion(nn.Module):
             nn.Dropout()  
         )  
         self.classifier = nn.Sequential()
-        
+        # 定义一个域域判别器
+        # self.domain_discriminator = DomainAdversarialNetwork(feature_dim=feature_dim, num_domains=num_domains)
     def forward(self, features):  
         """  
         Forward pass of the MultiViewFeatureFusion module.  
@@ -91,4 +93,4 @@ class MultiViewFeatureFusion(nn.Module):
         # Apply fully connected layer after fusion to obtain final representation  
         final_features = self.fc_fusion(fused_features)  
         ouputs = self.classifier(final_features)
-        return ouputs, weights
+        return ouputs, weights, fused_features

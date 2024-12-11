@@ -62,7 +62,7 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
                 for target in targets]) 
         
         # Forward pass
-        outputs, weights,_ = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
+        outputs, weights = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
 
         # Compute loss
         optimizer.zero_grad()
@@ -76,7 +76,7 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
         weights_log = F.log_softmax(weights, dim=-1)  # 确保 weights 是对数概率分布
         weights_label = F.softmax(weights_label, dim=-1)  # 确保 weights_label 是概率分布
         kl_loss = F.kl_div(weights_log, weights_label.to(args.device), reduction='sum') 
-        loss = loss+kl_loss
+        loss = loss+0.5*kl_loss
         loss_tracker.update(loss.item(), targets.size(0))
 
         # Backpropagation

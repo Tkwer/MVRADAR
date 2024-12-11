@@ -59,7 +59,7 @@ def validate_model(args, val_loader, num_classes, model, criterion):
             selected_features_dict = {k: minmaxscaler(v) for k, v in selected_features_dict.items()}
 
             # Forward pass
-            outputs = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
+            outputs, _, _ = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
 
             # Compute loss
             loss = criterion(outputs, targets.squeeze(dim=1))
