@@ -30,10 +30,9 @@ def initialize_model(args, num_classes):
     # Get other fusion-related parameters from args or set defaults
     if args.fusion_mode == 'concatenate': 
         method = getattr(args, 'method', 'concat')
-    elif args.fusion_mode == 'alignment':  
+    elif args.fusion_mode == 'attention':  
         method = getattr(args, 'method', 'attention')
-    elif args.fusion_mode == 'shared_specific':      
-        method = getattr(args, 'method', 'basic_shared')
+
         
     bottleneck_dim = getattr(args, 'bottleneck_dim', None)
 
@@ -53,8 +52,10 @@ def initialize_model(args, num_classes):
         input_feature_shapes=input_feature_shapes,
         fusion_mode=args.fusion_mode,
         method=method,
+        is_sharedspecific=args.is_sharedspecific,
         bottleneck_dim=bottleneck_dim,
-        selected_features=args.selected_features
+        selected_features=args.selected_features,
+        is_domain_loss=args.is_domain_loss
     )
 
     # Add a classifier layer to output logits for num_classes
@@ -124,7 +125,7 @@ def run_training(args, data_dir, train_ratios):
     save_path = os.path.join(args.model_path, final_path)
     os.makedirs(save_path, exist_ok=True)
     os.makedirs(os.path.join(save_path, 'output'), exist_ok=True)
-    
+    args.save_path = save_path
     with open(os.path.join(save_path, 'output/log.txt'), 'w') as f:  
         f.write(f"train dataset: {data_dir}\n")  
         f.write(f"train ratios: {train_ratios}")  

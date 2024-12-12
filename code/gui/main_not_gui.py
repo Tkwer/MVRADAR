@@ -1,3 +1,4 @@
+import os
 import yaml
 import threading
 import argparse
@@ -23,7 +24,7 @@ COLORS = {
     'CRITICAL': '\033[1;35m',  # 紫色
 }
  
-def get_logger(name, log_level=logging.DEBUG):
+def get_logger(name, log_level=logging.INFO):
     logger = logging.getLogger(name)
  
     if not GLOBAL_LOG_ENABLE:
@@ -58,20 +59,11 @@ def start_training(args):
     """
     开始训练过程。如果训练路径和方法正确配置，则启动训练任务；否则提示错误。
     """
-    train_and_vali_data_dir = gl.get_value('train_and_vali_data_dir')
-    train_ratio = gl.get_value('train_ratio')
-    selected_features = gl.get_value('selected_features')
-    fusion_mode = gl.get_value('fusion_mode')
-    if selected_features is not None and fusion_mode is not None:
-        args.selected_features = selected_features
-        for parent, children in fusion_mode.items():
-            args.fusion_mode = parent  # 父类名
-            args.method = children[0] if children else None  # 只取第一个子类，如果无子类为 None
-
-    if train_and_vali_data_dir and args.fusion_mode:
-        collector = TrainRunner('Listener', train_and_vali_data_dir, train_ratio, args)
+    if args.train_and_vali_data_dir and args.fusion_mode:
+        collector = TrainRunner('Listener', args.train_and_vali_data_dir, args.train_ratio, args)
         collector.start()
         update_train_progress(args)
+        collector.join()   # 等待训练线程完成
     else:
         logger.info('请检查训练路径和选中方法!')
 
@@ -79,12 +71,12 @@ def start_testing(args):
     """
     开始测试过程。如果测试路径正确配置，则启动测试任务；否则提示错误。
     """
-    test_data_dir_and_model = gl.get_value('test_data_dir_and_model')
 
-    if test_data_dir_and_model:
-        collector = TestRunner('Listener', test_data_dir_and_model, args)
+    if args.test_data_dir_and_model:
+        collector = TestRunner('Listener',args.test_data_dir_and_model, args)
         collector.start()
         update_test_progress(args)
+        collector.join()   # 等待训练线程完成
     else:
        logger.info('请检查路径和选中方法!')
 
@@ -114,7 +106,7 @@ def update_train_progress(args):
     
 def update_progress(args, update_callback, print_end_message, confusion_matrix1, confusion_matrix2, enable_ui_callback=None):
     print_str = args.print_queue.get()
-    logging.info(print_str)
+    logger.info(print_str)
 
     if print_str != print_end_message:
         timer = threading.Timer(0.02, update_callback)
@@ -128,6 +120,7 @@ def update_progress(args, update_callback, print_end_message, confusion_matrix1,
 def load_config(yaml_path):
     with open(yaml_path, 'r', encoding='utf-8') as file:
         return yaml.safe_load(file)
+
 
 if __name__ == '__main__':
     gl._init()
@@ -144,7 +137,7 @@ if __name__ == '__main__':
 
     # 如果还想支持命令行覆盖 YAML 配置
     parser = argparse.ArgumentParser(description='Config')
-    parser.add_argument('--config', default='code/examples/conf1.yaml', type=str, help='Path to config file')
+    parser.add_argument('--config', default='code/examples/conf2.yaml', type=str, help='Path to config file')
     config = load_config(parser.parse_args().config)
     # 添加所有 YAML 参数支持命令行覆盖
     for key, value in config.items():
@@ -159,7 +152,10 @@ if __name__ == '__main__':
 
     # 解析参数
     args = parser.parse_args()
-
+    args.save_path = []
+    
     torch.manual_seed(777) #cuda也固定种子了
-    start_training()
-    start_training()
+    for i in range(10):
+        start_training(args)
+        args.test_data_dir_and_model =[args.test_data_dir, [os.path.basename(args.save_path)]]
+        start_testing(args)

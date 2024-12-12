@@ -4,8 +4,7 @@ from models.encoder import FeatureEncoder2D, FeatureEncoder3D
 
 from models.decoder import (
     ConcatDecoder,
-    AlignmentDecoder,
-    SharedSpecificDecoder
+    AttentionDecoder
 )
 
 class MultiViewFeatureFusion(nn.Module):  
@@ -14,11 +13,11 @@ class MultiViewFeatureFusion(nn.Module):
     """  
     def __init__(self, backbone="custom", cnn_output_size=128, hidden_size=128,   
                  rnn_type='lstm', lstm_layers=1, bidirectional=True, fc_size=7, num_domains = 5,  
-                 input_feature_shapes=None, fusion_mode='concatenate', method='attention', 
-                 bottleneck_dim=None, selected_features=None):  
+                 input_feature_shapes=None, fusion_mode='concatenate', method='add', is_sharedspecific=0,
+                 bottleneck_dim=None, selected_features=None, is_domain_loss=0):  
         super(MultiViewFeatureFusion, self).__init__()  
 
-        self.fusion_mode = fusion_mode  # Fusion mode (concatenate/alignment/shared_specific)  
+        self.fusion_mode = fusion_mode  # Fusion mode (concatenate/attention)  
         self.method = method  # For SharedSpecificDecoder (e.g., 'basic_shared', etc.)  
         self.bottleneck_dim = bottleneck_dim  # Bottleneck dimension for shared-specific methods  
         self.selected_features = selected_features if selected_features else ['RT', 'DT', 'RDT', 'ERT', 'ART']  
@@ -47,16 +46,12 @@ class MultiViewFeatureFusion(nn.Module):
         if fusion_mode == 'concatenate':  
             # Use ConcatDecoder  
             self.decoder = ConcatDecoder(feature_dim, num_views=len(self.selected_features), method=method)  
-        elif fusion_mode == 'alignment':  
-            # Use AlignmentDecoder with a specific alignment strategy  
-            self.decoder = AlignmentDecoder(feature_dim, num_views=len(self.selected_features), method=method)  
-        elif fusion_mode == 'shared_specific':  
-            # Use SharedSpecificDecoder with a specific shared/specific method  
-            self.decoder = SharedSpecificDecoder(  
-                feature_dim, num_views=len(self.selected_features), method=method, bottleneck_dim=bottleneck_dim  
-            )  
+        elif fusion_mode == 'attention':  
+            # Use AttentionDecoder with a specific attention strategy  
+            self.decoder = AttentionDecoder(feature_dim, num_views=len(self.selected_features), 
+                                            is_sharedspecific=is_sharedspecific, method=method)   
         else:  
-            raise ValueError(f"Invalid fusion mode: {fusion_mode}. Choose from 'concatenate', 'alignment', or 'shared_specific'.")  
+            raise ValueError(f"Invalid fusion mode: {fusion_mode}. Choose from 'concatenate' or 'attention'.")  
 
         # Fully connected layer for post-fusion representation  
         self.fc_fusion = nn.Sequential(  
@@ -66,7 +61,8 @@ class MultiViewFeatureFusion(nn.Module):
         )  
         self.classifier = nn.Sequential()
         # 定义一个域域判别器
-        # self.domain_discriminator = DomainAdversarialNetwork(feature_dim=feature_dim, num_domains=num_domains)
+        if is_domain_loss:
+            self.domain_discriminator = DomainAdversarialNetwork(feature_dim=feature_dim, num_domains=num_domains)
     def forward(self, features):  
         """  
         Forward pass of the MultiViewFeatureFusion module.  

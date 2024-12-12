@@ -1,0 +1,147 @@
+# ---------------------------- #
+#          Dataset Params     #
+# ---------------------------- #
+train_and_vali_data_dir:
+  - /media/kc401/diskA/CQ/deeplearning/MVRADAR/dataset/person_1
+  - /media/kc401/diskA/CQ/deeplearning/MVRADAR/dataset/person_2
+  - /media/kc401/diskA/CQ/deeplearning/MVRADAR/dataset/person_3
+  - /media/kc401/diskA/CQ/deeplearning/MVRADAR/dataset/person_4
+  - /media/kc401/diskA/CQ/deeplearning/MVRADAR/dataset/person_5
+train_ratio: [0.8, 0.8, 0.8, 0.8, 0.8] 
+test_data_dir: [/media/kc401/diskA/CQ/deeplearning/MVRADAR/dataset/dataS]
+
+fusion_mode: "attention" 
+# 当fusion_mode是concatenate可以是"add"和"concat",
+# 当是attention时有"linear_projection","'se_attention'",'eca_attention','adaptive_attention'
+
+method: "linear_projection" 
+is_augmentation: 0 #为0就是不执行，为其他整数时，是隔着is_ride执行一次
+is_weights_loss: 0 #为0就是不执行，为其他数时，是weights_loss的权重
+is_domain_loss: 0 #为0就是不执行，为其他数时，是domain_loss的权重
+is_sharedspecific: 0 #为0就是不执行，为1就做线性投影分公共特征和独特特征
+# ---------------------------- #
+#          Training Params     #
+# ---------------------------- #
+epochs: 20                  # Number of training epochs
+lr: 5.0e-4                   # Learning rate 5e-4 对lr敏感，设置为1.0e-3后效果很差
+lr_step: 10                  # Step size for learning rate decay
+batch_size: 10               # Batch size for training
+workers: 0                   # Number of workers for data loading
+freeze: false                # Whether to freeze the pretrained model layers
+is_test: false               # Flag to indicate if it's in test mode
+
+# ---------------------------- #
+#          Model Params        #
+# ---------------------------- #
+model_path: './save_model/'  # Directory to save the model
+backbone: 'custom'
+
+cnn_output_size: 128         # Output size from CNN feature extractor
+hidden_size: 128             # Hidden size for RNN layers
+rnn_type: "lstm"             # Type of RNN (e.g., "lstm", "gru")
+lstm_layers: 1               # Number of LSTM layers
+bidirectional: true          # Whether the LSTM is bidirectional
+fc_size: 128                 # Size of the fully connected layer after feature fusion
+
+# ---------------------------- #
+#       Data Feature Params    #
+# ---------------------------- #
+selected_features:
+  - RT                        # Selected 2D feature (RT)
+  - DT                        # Selected 2D feature (DT)
+  - RDT                       # Selected 3D feature (RDT)
+  - ERT                       # Selected 3D feature (ERT)
+  - ART
+
+
+input_feature_shapes:
+  RT: [1, 48, 64]             # Shape of RT feature (2D)
+  DT: [1, 12, 64]             # Shape of DT feature (2D)
+  RDT: [12, 1, 64, 64]        # Shape of RDT feature (3D, sequence length 10)
+  ERT: [12, 1, 91, 64]        # Shape of ERT feature (3D, sequence length 10)
+  ART: [12, 1, 91, 64]        # Shape of ART feature (3D, sequence length 10)
+
+# ---------------------------- #
+#      Class Mapping (Labels)  #
+# ---------------------------- #
+class_mapping:
+  0: Back
+  1: Dblclick
+  2: Down
+  3: Front
+  4: Left
+  5: Right
+  6: Up
+  7: Unknown
+
+
+# ---------------------------- #
+#      不要改动这个  #
+# ---------------------------- #
+optional_features:
+  - ART    
+  - DT                       
+  - ERT                       
+  - RDT                       
+  - RT 
+
+
+# 特征权重软标签(先验知识)
+# #    [ ART,  ERT,  RDT,   DT,  RT ]  
+#   0: [0.05, 0.05, 0.05, 0.05, 0.80]  # back
+#   1: [0.00, 0.00, 0.20, 0.40, 0.40]  # dblclick
+#   2: [0.05, 0.80, 0.05, 0.05, 0.05]  # down  
+#   3: [0.05, 0.05, 0.05, 0.05, 0.80]  # front  
+#   4: [0.80, 0.00, 0.00, 0.20, 0.00]  # left  
+#   5: [0.80, 0.00, 0.00, 0.20, 0.00]  # right  
+#   6: [0.05, 0.80, 0.05, 0.05, 0.05]  # up 
+ 
+mv_feature_weights:  
+  0:  
+    ART: 0.05  
+    ERT: 0.05  
+    RDT: 0.05  
+    DT:  0.05  
+    RT:  0.80  
+  
+  1:  
+    ART: 0.00  
+    ERT: 0.00  
+    RDT: 0.20  
+    DT:  0.40  
+    RT:  0.40  
+  
+  2:  
+    ART: 0.05  
+    ERT: 0.80  
+    RDT: 0.05  
+    DT:  0.05  
+    RT:  0.05  
+  
+  3:  
+    ART: 0.05  
+    ERT: 0.05  
+    RDT: 0.05  
+    DT:  0.05  
+    RT:  0.80  
+  
+  4:  
+    ART: 0.80  
+    ERT: 0.00  
+    RDT: 0.00  
+    DT:  0.20  
+    RT:  0.00  
+  
+  5:  
+    ART: 0.80  
+    ERT: 0.00  
+    RDT: 0.00  
+    DT:  0.20  
+    RT:  0.00  
+  
+  6:  
+    ART: 0.05  
+    ERT: 0.80  
+    RDT: 0.05  
+    DT:  0.05  
+    RT:  0.05  

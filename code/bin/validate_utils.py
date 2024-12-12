@@ -85,7 +85,7 @@ def validate_model(args, val_loader, num_classes, model, criterion):
             predicted_labels = predictions.cpu().numpy()
             true_labels = targets.cpu().numpy()
             if args.is_test:
-                misclassified_indices = np.where(true_labels != predicted_labels)[0]
+                misclassified_indices = np.where(true_labels.squeeze() != predicted_labels)[0]
                 if len(misclassified_indices) > 0:
                     misclassified_paths = [file_paths[i] for i in misclassified_indices]
                     list_err.extend(misclassified_paths)

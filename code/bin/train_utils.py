@@ -39,7 +39,7 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
         targets = targets.to(args.device)
         domain_labels = domain_labels.to(args.device)
         # Apply RIDE augmentation every 20 batches (optional)
-        if batch_idx % 20 == 0:
+        if args.is_augmentation != 0 and batch_idx % args.is_augmentation == 0:  
             features_list = ride_augmentation(*features_list)
             args.print_queue.put("--RIDE Applied--")
 
@@ -65,7 +65,7 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
 
 
         # 如果加标签损失
-        if 1:
+        if args.is_weights_loss:
             weights_label = torch.stack([torch.tensor([  
                 args.mv_feature_weights[target.item()][feature_name]   
                 for feature_name in model.selected_features])   
@@ -79,10 +79,10 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
             #    - 'sum': 总损失  
             #    - 'none': 逐元素损失
             kl_loss = F.kl_div(weights_log, weights_label.to(args.device), reduction='sum') 
-            loss = loss + 0.5 * kl_loss
+            loss = loss + kl_loss
 
         # 如果加域不变对抗学习 前向传播，设置 alpha 用于 GRL
-        if 0:
+        if args.is_domain_loss:
             alpha = 0.1 + 0.9 * (epoch / args.epochs)  # 逐渐增大 alpha
             domain_logits = model.domain_discriminator(fused_features, alpha)
             adversarial_loss = criterion(domain_logits, domain_labels.squeeze(dim=1))

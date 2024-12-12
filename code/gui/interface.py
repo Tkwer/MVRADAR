@@ -653,8 +653,7 @@ class Ui_MainWindow(object):
         self.horizontalLayout_11.addWidget(self.line_16)
         method_dict = {
                     "concatenate": ["add", "concat"], 
-                    "alignment": ["attention", "mi", "adversarial", "graph"], 
-                    "shared_specific": ["basic_shared", "attention_enhanced", "adversarial_shared", "information_bottleneck", "graph_structured"]
+                    "attention": ["linear_projection", "se_attention", "eca_attention", "adaptive_attention"], 
                 }
         self.comboBox_4 = HierarchicalComboCheckBox(self.groupBox_3, method_dict)
 
