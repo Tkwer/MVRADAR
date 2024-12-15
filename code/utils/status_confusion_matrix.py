@@ -3,9 +3,9 @@ import numpy as np
 from datetime import datetime
 
 # Define the directory path containing subfolders and the time range
-base_dir = "/media/kc401/diskA/CQ/deeplearning/MVRADAR/save_model/all/alignment/attention"  # Replace with your actual directory
-start_time = datetime.strptime("2024-12-12_13-28-04", "%Y-%m-%d_%H-%M-%S")  # Replace with desired start time
-end_time = datetime.strptime("2024-12-12_14-02-20", "%Y-%m-%d_%H-%M-%S")  # Replace with desired end time
+base_dir = "/media/kc401/diskA/CQ/deeplearning/MVRADAR/save_model/all/attention/adaptive_attention"  # Replace with your actual directory
+start_time = datetime.strptime("2024-12-12_21-38-43", "%Y-%m-%d_%H-%M-%S")  # Replace with desired start time
+end_time = datetime.strptime("2024-12-13_18-13-00", "%Y-%m-%d_%H-%M-%S")  # Replace with desired end time
 
 # Initialize lists to store per-class accuracies
 all_accuracies = []
@@ -45,3 +45,10 @@ if all_accuracies:
     print("Per-class Variance Accuracies:", variance_accuracies)
 else:
     print("No confusion_matrix.txt files found in the specified time range.")
+
+
+# Per-class Mean Accuracies: [0.76325 0.9765  0.676   0.95925 0.80375 0.84375 0.66375]
+# Per-class Variance Accuracies: [0.00567131 0.000154   0.0103415  0.00057381 0.01844781 0.04202906 0.02143281]
+
+# Per-class Mean Accuracies: [0.758   0.95825 0.57925 0.96    0.84375 0.83375 0.509  ]
+# Per-class Variance Accuracies: [0.006411   0.00058506 0.03459881 0.00022875 0.01135031 0.03733781 0.06169525]

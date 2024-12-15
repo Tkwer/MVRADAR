@@ -33,7 +33,8 @@ class FeatureEncoder2D(nn.Module):
                 nn.MaxPool2d(kernel_size=3, stride=2),
             )
         else:
-            self.input_feature_shape[0] = 3 # 通道变成3
+            if self.backbone != "lenet5":
+                self.input_feature_shape[0] = 3 # 通道变成3
             # Use a pretrained CNN as the backbone
             self.feature_extractor = self._load_pretrained_backbone(self.backbone)
             
@@ -44,35 +45,46 @@ class FeatureEncoder2D(nn.Module):
         if self.use_fc:
             self.fc = nn.Sequential(
                 nn.Linear(self.feature_output_size, fc_size),
+                nn.ReLU(inplace=True),
                 nn.Dropout()
             )
 
     def _load_pretrained_backbone(self, backbone):
         """
-        Load a pretrained CNN backbone from torchvision.
+        Load a CNN backbone without pretrained weights.
         """
-        if backbone == "alexnet":
-            model = models.alexnet(pretrained=True)
-            feature_extractor = model.features
-        elif backbone.startswith("resnet"):
-            model = getattr(models, backbone)(pretrained=True)
+        if backbone == "resnet18":
+            # ResNet-18 without pretrained weights
+            model = models.resnet18(pretrained=False)
             # Remove the fully connected layer (fc) and adaptive pooling
             feature_extractor = nn.Sequential(
                 *list(model.children())[:-2]
             )
+        elif backbone == "mobilenet":
+            # MobileNetV2 without pretrained weights
+            model = models.mobilenet_v3_small(pretrained=False)
+            feature_extractor = model.features
+        elif backbone == "lenet5":
+            # Define a custom LeNet-5 model
+            feature_extractor = nn.Sequential(
+                nn.Conv2d(1, 6, kernel_size=5, stride=1, padding=2),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.Conv2d(6, 16, kernel_size=5, stride=1, padding=0),
+                nn.ReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+            )
         else:
-            raise ValueError(f"Unsupported backbone: {backbone}. Choose from 'custom', 'alexnet', 'resnet18', etc.")
+            raise ValueError(f"Unsupported backbone: {backbone}. Choose from 'lenet5', 'mobilenet', 'resnet18', 'custom'.")
+        
         return feature_extractor
     
     def _compute_feature_size(self, input_feature_shape):
         """
         Compute the output size of the feature extractor for a given input shape.
         """
-        C, *rest = input_feature_shape
-        if len(rest) == 2:
-            H, W = rest
-        elif len(rest) == 3:    
-            C, H, W = rest
+        C, H, W = input_feature_shape
+
         dummy_input = torch.randn(1, C, H, W)  # Create a dummy input tensor
         with torch.no_grad():
             output = self.feature_extractor(dummy_input)
@@ -83,7 +95,7 @@ class FeatureEncoder2D(nn.Module):
         Forward pass.
         - x: Input tensor of shape [batch_size, channels, height, width].
         """
-        if self.backbone != "custom":
+        if self.backbone != "custom" and self.backbone != "lenet5":
             # Pretrained models expect 3 channels (RGB). Handle grayscale inputs by repeating the channel.
             if x.size(1) == 1:
                 x = x.repeat(1, 3, 1, 1)
@@ -109,9 +121,9 @@ class FeatureEncoder3D(nn.Module):
     """
     def __init__(self, cnn_output_size=128, backbone="custom", hidden_size=128, rnn_type='lstm', lstm_layers=1, bidirectional=True, fc_size=128, feature_use_fc=True, input_feature_shape=(1, 64, 64)):
         super(FeatureEncoder3D, self).__init__()
-        
+        input_feature_shape_2D = input_feature_shape[1:]
         # Use the existing FeatureEncoder2D class for CNN feature extraction
-        self.feature_extractor = FeatureEncoder2D(fc_size=cnn_output_size, backbone=backbone, use_fc=feature_use_fc, input_feature_shape=input_feature_shape)
+        self.feature_extractor = FeatureEncoder2D(fc_size=cnn_output_size, backbone=backbone, use_fc=feature_use_fc, input_feature_shape=input_feature_shape_2D)
 
         # Recurrent Layer
         rnn_input_size = cnn_output_size  # Flattened CNN output size

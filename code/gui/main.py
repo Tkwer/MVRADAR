@@ -372,3 +372,4 @@ if __name__ == '__main__':
     torch.manual_seed(777) #cuda也固定种子了
 
     application(args)
+    

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from utils.helpers import AverageMeter, minmaxscaler
 from bin.ride_augmentation import ride_augmentation
 from utils.common import accuracy, confusion_matrix_compute
-
+from models.methods.DScombine import combined_loss
 def train_model(args, train_loader, model, num_classes, criterion, optimizer, epoch):
     """
     Train the MultiViewFeatureFusion model for one epoch.
@@ -31,7 +31,7 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
     confusion_matrix = torch.zeros(num_classes, num_classes).to(args.device)
 
     for batch_idx, data in enumerate(train_loader):
-        
+        optimizer.zero_grad()
         # Unpack data: data[0] is a list of feature tensors, data[1] is the target labels
         features_list, targets, domain_labels = [
             [d.to(args.device) for d in data[:-3]], data[-3],data[-1]]
@@ -58,11 +58,22 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
         selected_features_dict = {k: minmaxscaler(v) for k, v in selected_features_dict.items()}
 
         # Forward pass
-        outputs, weights, fused_features = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
-        optimizer.zero_grad()
-        # Compute loss
-        loss = criterion(outputs, targets.squeeze(dim=1))
-
+        if args.method=='DScombine':
+            alphas, alpha_combined, u_a, u_tensor = model(selected_features_dict) 
+            weights = 1 - u_tensor
+            outputs = alpha_combined - 1
+            loss = combined_loss(targets.squeeze(dim=1), alphas, num_classes, alpha_combined, epoch, args.epochs, device=args.device)
+        else:
+            outputs, weights, fused_features = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
+        
+            # Compute loss
+            loss = criterion(outputs, targets.squeeze(dim=1))
+            # 如果加域不变对抗学习 前向传播，设置 alpha 用于 GRL
+            if args.is_domain_loss:
+                alpha = 0.1 + 0.9 * (epoch / args.epochs)  # 逐渐增大 alpha
+                domain_logits = model.domain_discriminator(fused_features, alpha)
+                adversarial_loss = criterion(domain_logits, domain_labels.squeeze(dim=1))
+                loss = loss + args.is_domain_loss * adversarial_loss
 
         # 如果加标签损失
         if args.is_weights_loss:
@@ -79,14 +90,9 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
             #    - 'sum': 总损失  
             #    - 'none': 逐元素损失
             kl_loss = F.kl_div(weights_log, weights_label.to(args.device), reduction='sum') 
-            loss = loss + kl_loss
+            loss = loss + args.is_weights_loss*kl_loss
 
-        # 如果加域不变对抗学习 前向传播，设置 alpha 用于 GRL
-        if args.is_domain_loss:
-            alpha = 0.1 + 0.9 * (epoch / args.epochs)  # 逐渐增大 alpha
-            domain_logits = model.domain_discriminator(fused_features, alpha)
-            adversarial_loss = criterion(domain_logits, domain_labels.squeeze(dim=1))
-            loss = loss + 0.2 * adversarial_loss
+
 
         loss_tracker.update(loss.item(), targets.size(0))
 

@@ -18,7 +18,10 @@ arch: 'RT_CNN'               # Model architecture (e.g., RT_CNN)
 fusion_mode: "alignment"   # Fusion mode for multi-view features (e.g., "concatenate", "alignment", "shared_specific")
 alignment_type: "attention"  # In "alignment" mode use method (e.g. "attention", "mi", "adversarial", "graph")
 sharedspecific_method: "basic_shared" # In "shared_specific" mode use method (e.g. "basic_shared", "attention_enhanced", "adversarial_shared", "information_bottleneck", "graph_structured")
-
+is_augmentation: 20 #为0就是不执行，为其他整数时，是隔着is_augmentation执行一次
+is_weights_loss: 1  #为0就是不执行，为其他数时，是weights_loss的权重
+is_domain_loss: 0   #为0就是不执行，为其他数时，是domain_loss的权重
+is_sharedspecific: 0 #为0就是不执行，为1就做线性投影分公共特征和独特特征
 cnn_output_size: 128         # Output size from CNN feature extractor
 hidden_size: 128             # Hidden size for RNN layers
 rnn_type: "lstm"             # Type of RNN (e.g., "lstm", "gru")

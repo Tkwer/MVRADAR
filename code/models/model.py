@@ -14,11 +14,11 @@ class MultiViewFeatureFusion(nn.Module):
     def __init__(self, backbone="custom", cnn_output_size=128, hidden_size=128,   
                  rnn_type='lstm', lstm_layers=1, bidirectional=True, fc_size=7, num_domains = 5,  
                  input_feature_shapes=None, fusion_mode='concatenate', method='add', is_sharedspecific=0,
-                 bottleneck_dim=None, selected_features=None, is_domain_loss=0):  
+                 bottleneck_dim=None, selected_features=None, is_domain_loss=0, num_classes=7):  
         super(MultiViewFeatureFusion, self).__init__()  
 
         self.fusion_mode = fusion_mode  # Fusion mode (concatenate/attention)  
-        self.method = method  # For SharedSpecificDecoder (e.g., 'basic_shared', etc.)  
+        self.method = method  # (e.g., 'add', etc.)  
         self.bottleneck_dim = bottleneck_dim  # Bottleneck dimension for shared-specific methods  
         self.selected_features = selected_features if selected_features else ['RT', 'DT', 'RDT', 'ERT', 'ART']  
 
@@ -49,7 +49,7 @@ class MultiViewFeatureFusion(nn.Module):
         elif fusion_mode == 'attention':  
             # Use AttentionDecoder with a specific attention strategy  
             self.decoder = AttentionDecoder(feature_dim, num_views=len(self.selected_features), 
-                                            is_sharedspecific=is_sharedspecific, method=method)   
+                                            is_sharedspecific=is_sharedspecific, method=method, num_classes=num_classes)   
         else:  
             raise ValueError(f"Invalid fusion mode: {fusion_mode}. Choose from 'concatenate' or 'attention'.")  
 
@@ -83,10 +83,13 @@ class MultiViewFeatureFusion(nn.Module):
             encoded_feature = self.encoders[feature_name](features[feature_name])  
             encoded_features.append(encoded_feature)  
 
-        # Fuse the extracted features using the decoder  
-        fused_features, weights = self.decoder(*encoded_features)  
+        # Fuse the extracted features using the decoder
+        if self.method=='DScombine':
+            return self.decoder(*encoded_features)  
+        else:  
+            fused_features, weights = self.decoder(*encoded_features)  
 
-        # Apply fully connected layer after fusion to obtain final representation  
-        final_features = self.fc_fusion(fused_features)  
-        ouputs = self.classifier(final_features)
-        return ouputs, weights, fused_features
+            # Apply fully connected layer after fusion to obtain final representation  
+            final_features = self.fc_fusion(fused_features)  
+            ouputs = self.classifier(final_features)
+            return ouputs, weights, fused_features

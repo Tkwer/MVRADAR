@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from models.methods.DScombine import DirichletCombiner 
 
 # Basic Shared Model
 class BasicSharedSpecificModel(nn.Module):
@@ -31,9 +32,10 @@ class MultiViewAttention(nn.Module):
         raise NotImplementedError("Subclasses should implement this method.")
 
     def forward(self, views):
-        view_weights = self.weight_generator(views)  # Generate view weights
+        view_weights = self.weight_generator(views)  # Generate view weights (batch_size, num_views)
         views_tensor = torch.stack(views, dim=-1)  # (batch_size, feature_dim, num_views)
         aligned_views = views_tensor * view_weights.unsqueeze(1)  # (batch_size, feature_dim, num_views)
+
         cross_view =  aligned_views.view(aligned_views.shape[0], -1)  # 形状 (batch_size, feature_dim * num_views)    # (batch_size, feature_dim * num_views)
         alignment = self.fusion(cross_view)  # (batch_size, feature_dim)
         return alignment, view_weights
@@ -109,6 +111,40 @@ class AdaptiveMultiViewAttention(MultiViewAttention):
         K = self.key_linear(views_tensor)  # (num_views, batch_size, feature_dim)
         V = self.value_linear(views_tensor)  # (num_views, batch_size, feature_dim)
         attn_output, _ = self.cross_view_attention(Q, K, V)  # (num_views, batch_size, feature_dim)
-        attn_output = attn_output.permute(0, 1)  # (batch_size, num_views, feature_dim)
+        attn_output = attn_output.permute(1, 0, 2)  # (batch_size, num_views, feature_dim)
         attn_output_pooled = attn_output.mean(dim=2)  # (batch_size, num_views)
         return self.fc_layers(attn_output_pooled)  # (batch_size, num_views)
+
+
+# MultiViewDSFusion
+class MultiViewDSFusion(nn.Module):
+    def __init__(self, num_views, feature_dim, num_classes):
+        super().__init__()
+        self.num_views = num_views
+        self.feature_dim = feature_dim
+        # 使用 nn.Sequential 定义每个分类器的多个层
+        self.classifiers = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(feature_dim, num_classes),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.5)
+            ) for _ in range(num_views)
+        ])
+        self.combiner = DirichletCombiner(classes=num_classes)
+
+        self.fusion = nn.Linear(feature_dim * num_views, feature_dim) 
+
+    def weight_generator(self, views):
+        raise NotImplementedError("Subclasses should implement this method.")
+
+    def forward(self, views):
+
+        alphas = dict()
+        for v_num in range(self.num_views):
+            evidence = self.classifiers[v_num](views[v_num])
+            alphas[v_num] = evidence + 1
+
+        
+        alpha_combined, u_a, u_list = self.combiner.DS_Combin(alphas)        
+        evidence_a = alpha_combined - 1
+        return alphas, alpha_combined, u_a, u_list

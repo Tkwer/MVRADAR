@@ -3,6 +3,8 @@ import yaml
 import threading
 import argparse
 import torch
+import atexit
+import queue
 from queue import Queue 
 import utils.globalvar as gl
 from bin.train import TrainRunner
@@ -53,7 +55,28 @@ def get_logger(name, log_level=logging.INFO):
  
     return logger
 
+class WorkerThread(threading.Thread):
+    def __init__(self, task_queue, shutdown_event):
+        super().__init__()
+        self.task_queue = task_queue
+        self.shutdown_event = shutdown_event
+        self.daemon = True  # 设置为守护线程，主程序退出时自动结束
 
+    def run(self):
+        logger.info("工作线程启动。")
+        while not self.shutdown_event.is_set():
+            try:
+                # 使用较短的超时，以便能及时检查关闭事件
+                task, args = self.task_queue.get(timeout=0.5)
+                # logger.info(f"执行任务: {task.__name__}")
+                try:
+                    task(*args)
+                except Exception as e:
+                    logger.error(f"执行任务 {task.__name__} 时出错: {e}")
+                self.task_queue.task_done()
+            except queue.Empty:
+                continue
+        logger.info("工作线程终止。")
 
 def start_training(args):
     """
@@ -102,17 +125,28 @@ def update_train_progress(args):
         confusion_matrix2=args.confusion_val
     )
 
-
+def cleanup():
+    logger.info("执行清理操作，设置关闭事件。")
+    shutdown_event.set()
+    worker.join()  # 等待工作线程结束
     
 def update_progress(args, update_callback, print_end_message, confusion_matrix1, confusion_matrix2, enable_ui_callback=None):
-    print_str = args.print_queue.get()
-    logger.info(print_str)
+    try:
+        # 从队列中获取字符串，增加超时以避免阻塞过长
+        print_str = args.print_queue.get(timeout=1)
+        logger.info(f"{print_str}")
+    except queue.Empty:
+        logger.warning("print_queue 获取超时，没有数据可处理。")
+        return
 
     if print_str != print_end_message:
-        timer = threading.Timer(0.02, update_callback)
-        timer.start()
+        # 将 update_callback 任务添加到任务队列
+        task_queue.put((update_callback, ()))
+        # logger.info("已将 update_callback 添加到任务队列。")
     elif enable_ui_callback:
-        enable_ui_callback()
+        # 将 enable_ui_callback 任务添加到任务队列
+        task_queue.put((enable_ui_callback, ()))
+        # logger.info("已将 enable_ui_callback 添加到任务队列。")
 
     
 
@@ -153,9 +187,22 @@ if __name__ == '__main__':
     # 解析参数
     args = parser.parse_args()
     args.save_path = []
-    
+    # 创建任务队列
+    task_queue = Queue()
+
+    # 创建关闭事件
+    shutdown_event = threading.Event()
+
+    # 创建并启动工作线程
+    worker = WorkerThread(task_queue, shutdown_event)
+    worker.start()
+    # 注册清理函数
+    atexit.register(cleanup)
     torch.manual_seed(777) #cuda也固定种子了
     for i in range(10):
         start_training(args)
         args.test_data_dir_and_model =[args.test_data_dir, [os.path.basename(args.save_path)]]
         start_testing(args)
+        # 等待任务队列中的所有任务完成
+    task_queue.join()
+    logger.info("所有任务已完成。")

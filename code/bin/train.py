@@ -55,7 +55,8 @@ def initialize_model(args, num_classes):
         is_sharedspecific=args.is_sharedspecific,
         bottleneck_dim=bottleneck_dim,
         selected_features=args.selected_features,
-        is_domain_loss=args.is_domain_loss
+        is_domain_loss=args.is_domain_loss,
+        num_classes=num_classes,
     )
 
     # Add a classifier layer to output logits for num_classes

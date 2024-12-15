@@ -5,6 +5,7 @@ from models.methods.attention import (
     MultiViewSEAttention,
     MultiViewECAAttention,
     AdaptiveMultiViewAttention,
+    MultiViewDSFusion
 )
 
 # 使用工厂字典映射不同的attention方法
@@ -89,12 +90,16 @@ class AttentionDecoder(MultiviewDecoder):
     """  
     Aligns multiple views using different attention strategies.  
     """  
-    def __init__(self, feature_dim, num_views=None, is_sharedspecific=0, method='linear_projection'):  
+    def __init__(self, feature_dim, num_views=None, is_sharedspecific=0, method='linear_projection', num_classes=7):  
         super().__init__(feature_dim=feature_dim, num_views=num_views, mode='attention')  
-        if method not in ATTENTION_FACTORIES:  
-            raise ValueError(f"Unknown attention type: {method}")  
+
         self.method = method  
-        self.attention = ATTENTION_FACTORIES[method](num_views, feature_dim, is_sharedspecific)  
+        if method=='DScombine':
+            self.attention = MultiViewDSFusion(num_views, feature_dim, num_classes)
+        else:
+            if method not in ATTENTION_FACTORIES:  
+                raise ValueError(f"Unknown attention type: {method}")  
+            self.attention = ATTENTION_FACTORIES[method](num_views, feature_dim, is_sharedspecific)  
 
     def forward(self, *x_list, **kwargs):  
         # 直接调用父类的 forward 方法  

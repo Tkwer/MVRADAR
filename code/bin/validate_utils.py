@@ -59,9 +59,14 @@ def validate_model(args, val_loader, num_classes, model, criterion):
             selected_features_dict = {k: minmaxscaler(v) for k, v in selected_features_dict.items()}
 
             # Forward pass
-            outputs, _, _ = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
-
-            # Compute loss
+            # Forward pass
+            if args.method=='DScombine':
+                alphas, alpha_combined, u_a, u_tensor = model(selected_features_dict) 
+                weights = 1 - u_tensor
+                outputs = alpha_combined - 1
+            else:
+                outputs, weights, fused_features = model(selected_features_dict)  # Outputs are logits of shape [batch_size, num_classes]
+                # Compute loss
             loss = criterion(outputs, targets.squeeze(dim=1))
             loss_tracker.update(loss.item(), targets.size(0))
 
