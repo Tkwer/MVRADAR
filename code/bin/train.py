@@ -31,7 +31,7 @@ def initialize_model(args, num_classes):
     if args.fusion_mode == 'concatenate': 
         method = getattr(args, 'method', 'concat')
     elif args.fusion_mode == 'attention':  
-        method = getattr(args, 'method', 'attention')
+        method = getattr(args, 'method', 'DScombine')
 
         
     bottleneck_dim = getattr(args, 'bottleneck_dim', None)
@@ -60,7 +60,8 @@ def initialize_model(args, num_classes):
     )
 
     # Add a classifier layer to output logits for num_classes
-    model.classifier = nn.Linear(args.fc_size, num_classes)
+    if method != 'DScombine':
+        model.classifier = nn.Linear(args.fc_size, num_classes)
 
     return model
 

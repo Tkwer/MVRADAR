@@ -61,7 +61,7 @@ def validate_model(args, val_loader, num_classes, model, criterion):
             # Forward pass
             # Forward pass
             if args.method=='DScombine':
-                alphas, alpha_combined, u_a, u_tensor = model(selected_features_dict) 
+                fused_features, alphas, alpha_combined, u_a, u_tensor = model(selected_features_dict) 
                 weights = 1 - u_tensor
                 outputs = alpha_combined - 1
             else:

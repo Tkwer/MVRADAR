@@ -133,9 +133,10 @@ def cleanup():
 def update_progress(args, update_callback, print_end_message, confusion_matrix1, confusion_matrix2, enable_ui_callback=None):
     try:
         # 从队列中获取字符串，增加超时以避免阻塞过长
-        print_str = args.print_queue.get(timeout=1)
+        print_str = args.print_queue.get(timeout=5)
         logger.info(f"{print_str}")
     except queue.Empty:
+        task_queue.put((update_callback, ()))
         logger.warning("print_queue 获取超时，没有数据可处理。")
         return
 

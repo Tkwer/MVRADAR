@@ -59,7 +59,7 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
 
         # Forward pass
         if args.method=='DScombine':
-            alphas, alpha_combined, u_a, u_tensor = model(selected_features_dict) 
+            fused_features, alphas, alpha_combined, u_a, u_tensor = model(selected_features_dict) 
             weights = 1 - u_tensor
             outputs = alpha_combined - 1
             loss = combined_loss(targets.squeeze(dim=1), alphas, num_classes, alpha_combined, epoch, args.epochs, device=args.device)
@@ -68,12 +68,13 @@ def train_model(args, train_loader, model, num_classes, criterion, optimizer, ep
         
             # Compute loss
             loss = criterion(outputs, targets.squeeze(dim=1))
-            # 如果加域不变对抗学习 前向传播，设置 alpha 用于 GRL
-            if args.is_domain_loss:
-                alpha = 0.1 + 0.9 * (epoch / args.epochs)  # 逐渐增大 alpha
-                domain_logits = model.domain_discriminator(fused_features, alpha)
-                adversarial_loss = criterion(domain_logits, domain_labels.squeeze(dim=1))
-                loss = loss + args.is_domain_loss * adversarial_loss
+
+        # 如果加域不变对抗学习 前向传播，设置 alpha 用于 GRL
+        if args.is_domain_loss:
+            alpha = 0.1 + 0.9 * (epoch / args.epochs)  # 逐渐增大 alpha
+            domain_logits = model.domain_discriminator(fused_features, alpha)
+            adversarial_loss = criterion(domain_logits, domain_labels.squeeze(dim=1))
+            loss = loss + args.is_domain_loss * adversarial_loss
 
         # 如果加标签损失
         if args.is_weights_loss:

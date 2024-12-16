@@ -21,7 +21,7 @@ class MultiViewFeatureFusion(nn.Module):
         self.method = method  # (e.g., 'add', etc.)  
         self.bottleneck_dim = bottleneck_dim  # Bottleneck dimension for shared-specific methods  
         self.selected_features = selected_features if selected_features else ['RT', 'DT', 'RDT', 'ERT', 'ART']  
-
+        self.num_views = len(self.selected_features)
         # Dynamically create encoders for the selected features  
         self.encoders = nn.ModuleDict()  
         for feature in self.selected_features:  
@@ -45,10 +45,10 @@ class MultiViewFeatureFusion(nn.Module):
         # Initialize decoder based on fusion mode  
         if fusion_mode == 'concatenate':  
             # Use ConcatDecoder  
-            self.decoder = ConcatDecoder(feature_dim, num_views=len(self.selected_features), method=method)  
+            self.decoder = ConcatDecoder(feature_dim, num_views=self.num_views, method=method)  
         elif fusion_mode == 'attention':  
             # Use AttentionDecoder with a specific attention strategy  
-            self.decoder = AttentionDecoder(feature_dim, num_views=len(self.selected_features), 
+            self.decoder = AttentionDecoder(feature_dim, num_views=self.num_views, 
                                             is_sharedspecific=is_sharedspecific, method=method, num_classes=num_classes)   
         else:  
             raise ValueError(f"Invalid fusion mode: {fusion_mode}. Choose from 'concatenate' or 'attention'.")  
@@ -62,7 +62,8 @@ class MultiViewFeatureFusion(nn.Module):
         self.classifier = nn.Sequential()
         # 定义一个域域判别器
         if is_domain_loss:
-            self.domain_discriminator = DomainAdversarialNetwork(feature_dim=feature_dim, num_domains=num_domains)
+            self.domain_discriminator = DomainAdversarialNetwork(feature_dim=feature_dim, num_domains=num_domains,
+                                                                 method=method, num_views=self.num_views)
     def forward(self, features):  
         """  
         Forward pass of the MultiViewFeatureFusion module.  
@@ -85,7 +86,8 @@ class MultiViewFeatureFusion(nn.Module):
 
         # Fuse the extracted features using the decoder
         if self.method=='DScombine':
-            return self.decoder(*encoded_features)  
+            alphas, alpha_combined, u_a, u_tensor = self.decoder(*encoded_features)  
+            return encoded_features, alphas, alpha_combined, u_a, u_tensor
         else:  
             fused_features, weights = self.decoder(*encoded_features)  
 

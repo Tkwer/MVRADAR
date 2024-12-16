@@ -11,7 +11,7 @@ train_and_vali_data_dir:
 train_ratio: [0.8, 0.8, 0.8, 0.8, 0.8] 
 test_data_dir: [/media/kc401/diskA/CQ/deeplearning/MVRADAR/dataset/dataS]
 
-backbone: 'custom'           # 支持 'lenet5', 'mobilenet', 'resnet18', 'custom'
+backbone: 'resnet18'           # 支持 'lenet5', 'mobilenet', 'resnet18', 'custom'
 fusion_mode: "attention" 
 # 当fusion_mode是concatenate时有method方法:"add"和"concat",
 # 当fusion_mode是attention  时有method方法:"linear_projection","'se_attention'",'eca_attention','adaptive_attention','DScombine'
@@ -19,7 +19,7 @@ fusion_mode: "attention"
 method: "DScombine" 
 is_augmentation: 20 #为0就是不执行，为其他整数时，是隔着is_augmentation执行一次
 is_weights_loss: 1  #为0就是不执行，为其他数时，是weights_loss的权重
-is_domain_loss: 0   #为0就是不执行，为其他数时，是domain_loss的权重
+is_domain_loss: 0.25   #为0就是不执行，为其他数时，是domain_loss的权重
 is_sharedspecific: 0 #为0就是不执行，为1就做线性投影分公共特征和独特特征
 # ---------------------------- #
 #          Training Params     #

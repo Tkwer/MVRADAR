@@ -55,14 +55,14 @@ class FeatureEncoder2D(nn.Module):
         """
         if backbone == "resnet18":
             # ResNet-18 without pretrained weights
-            model = models.resnet18(pretrained=False)
+            model = models.resnet18(weights=None)
             # Remove the fully connected layer (fc) and adaptive pooling
             feature_extractor = nn.Sequential(
                 *list(model.children())[:-2]
             )
         elif backbone == "mobilenet":
             # MobileNetV2 without pretrained weights
-            model = models.mobilenet_v3_small(pretrained=False)
+            model = models.mobilenet_v3_small(weights=None)
             feature_extractor = model.features
         elif backbone == "lenet5":
             # Define a custom LeNet-5 model
