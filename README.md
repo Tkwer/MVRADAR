@@ -68,8 +68,7 @@ MVRADAR/
 │       ├── common.py          # Common utilities
 │       └── globalvar.py       # Global variables
 ├── dataset/                   # Dataset storage (not included in repo)
-├── save_model/                # Saved model storage
-├── gesture_icons/             # Gesture visualization icons
+├── save_model/                # Saved model storage (not included in repo)
 └── LICENSE                    # MIT License
 ```
 

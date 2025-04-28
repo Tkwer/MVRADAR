@@ -229,10 +229,10 @@ def select_file():
 def openfile():
     pass
 
-def Recognition_Gesture(view_gesture):
-    # fanhui = ctt.recognize1(net,[i[Spinbox.value()] for i in file_list])
-    fanhui = 7
-    view_gesture.setPixmap(QtGui.QPixmap("visualization/gesture_icons/"+str(fanhui)+".jpg"))
+# def Recognition_Gesture(view_gesture):
+#     # fanhui = ctt.recognize1(net,[i[Spinbox.value()] for i in file_list])
+#     fanhui = 7
+#     view_gesture.setPixmap(QtGui.QPixmap("visualization/gesture_icons/"+str(fanhui)+".jpg"))
 
     
 def setup_views(ui):
@@ -252,7 +252,7 @@ def setup_views(ui):
         view.setCentralWidget(view_box)  # 去除边界
         view_boxes.append(view_box)
 
-    ui.graphicsView_5.setPixmap(QtGui.QPixmap("gesture_icons/7.jpg"))
+    # ui.graphicsView_5.setPixmap(QtGui.QPixmap("gesture_icons/7.jpg"))
     return view_boxes
 
 def setup_image_items(color_combobox, view_boxes):
@@ -276,7 +276,7 @@ def connect_signals(ui, image_items, args):
     连接控件信号与相应的槽函数。
     """
     ui.pushButton.clicked.connect(lambda: auto_update_figure(0))  # 自动更新
-    ui.pushButton_2.clicked.connect(lambda:Recognition_Gesture(ui.graphicsView_5))          # 手势识别
+    # ui.pushButton_2.clicked.connect(lambda:Recognition_Gesture(ui.graphicsView_5))          # 手势识别
     ui.pushButton_3.clicked.connect(openfile)                     # 打开文件
     ui.pushButton_4.clicked.connect(QtWidgets.QApplication.instance().exit)  # 退出
     ui.pushButton_6.clicked.connect(QtWidgets.QApplication.instance().exit)  # 退出
