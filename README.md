@@ -143,7 +143,7 @@ test_data_dir: [/path/to/test/dataset]  # Test dataset path
 # Model Configuration
 backbone: 'resnet18'           # Network backbone
 fusion_mode: "attention"       # Feature fusion mode
-method: "linear_projection"    # Fusion method
+method: "se_attention"    # Fusion method
 
 # Training Parameters
 epochs: 50                     # Number of training epochs
@@ -168,7 +168,7 @@ lr: 1.0e-3                     # Learning rate
 - `concatenate`: Simple concatenation of features
   - Methods: `add`, `concat`
 - `attention`: Attention-based fusion
-  - Methods: `linear_projection`, `se_attention`, `eca_attention`, `adaptive_attention`, `DScombine`
+  - Methods: `se_attention`, `eca_attention`, `adaptive_attention`, `DScombine`
 
 ### Gesture Classes
 - `Back`: Backward hand movement
@@ -184,6 +184,13 @@ lr: 1.0e-3                     # Learning rate
 - [RadarStream](https://github.com/Tkwer/RadarStream): Radar data acquisition and streaming tools
 - [Gesture-Recognition-Based-on-mmwave-MIMO-Radar](https://github.com/Tkwer/Gesture-Recognition-Based-on-mmwave-MIMO-Radar): Dataset repository with detailed information about the radar data format and collection process
 
+## Citation
+
+If this project helps your research, please consider citing our papers:
+
+```
+
+```
 ## �📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
