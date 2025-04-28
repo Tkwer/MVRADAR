@@ -179,7 +179,7 @@ lr: 1.0e-3                     # Learning rate
 - `Right`: Rightward hand movement
 - `Dblclick`: Double click gesture
 
-## � Related Repositories
+## Related Repositories
 
 - [RadarStream](https://github.com/Tkwer/RadarStream): Radar data acquisition and streaming tools
 - [Gesture-Recognition-Based-on-mmwave-MIMO-Radar](https://github.com/Tkwer/Gesture-Recognition-Based-on-mmwave-MIMO-Radar): Dataset repository with detailed information about the radar data format and collection process
@@ -191,6 +191,6 @@ If this project helps your research, please consider citing our papers:
 ```
 
 ```
-## �📄 License
+##  License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
