@@ -7,6 +7,8 @@
 
 A real-time gesture recognition system using multi-dimensional features from MIMO radar data. This project implements a multi-view feature fusion approach to accurately recognize hand gestures captured by millimeter-wave radar.
 
+This project works with radar data collected using [RadarStream](https://github.com/Tkwer/RadarStream), a companion repository for radar data acquisition and streaming.
+
 ## 🌟 Overview
 
 MVRADAR is a comprehensive system for real-time gesture recognition using millimeter-wave MIMO radar. The system processes multiple radar data representations (Range-Time, Doppler-Time, Range-Doppler, etc.) and fuses these multi-dimensional features to achieve robust gesture recognition performance.
@@ -91,9 +93,10 @@ MVRADAR/
    pip install torch torchvision numpy matplotlib pyyaml pyqtgraph PyQt5
    ```
 
-4. Download the dataset:
+4. Download the dataset and tools:
 
-   The dataset can be found in the companion repository: [Gesture-Recognition-Based-on-mmwave-MIMO-Radar](https://github.com/Tkwer/Gesture-Recognition-Based-on-mmwave-MIMO-Radar)
+   - The dataset can be found in the companion repository: [Gesture-Recognition-Based-on-mmwave-MIMO-Radar](https://github.com/Tkwer/Gesture-Recognition-Based-on-mmwave-MIMO-Radar)
+   - For real-time radar data acquisition and streaming, use: [RadarStream](https://github.com/Tkwer/RadarStream)
 
 ## 📊 Usage
 
@@ -176,6 +179,11 @@ lr: 1.0e-3                     # Learning rate
 - `Right`: Rightward hand movement
 - `Dblclick`: Double click gesture
 
-## 📄 License
+## � Related Repositories
+
+- [RadarStream](https://github.com/Tkwer/RadarStream): Radar data acquisition and streaming tools
+- [Gesture-Recognition-Based-on-mmwave-MIMO-Radar](https://github.com/Tkwer/Gesture-Recognition-Based-on-mmwave-MIMO-Radar): Dataset repository with detailed information about the radar data format and collection process
+
+## �📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
